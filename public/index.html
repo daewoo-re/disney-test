@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 프로포즈 영상 · 무료 체험</title>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
+<style>
+:root{
+  --ink:#1f1f1f;--sub:#888;--line:#e8e8e8;--field:#f8f8f8;
+  --accent:#ff5b6e;--accent-bg:#fff0f2;--accent-bd:#ffd6dc;
+  --green:#22c55e;--green-bg:#f0fdf4;--green-bd:#bbf7d0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Pretendard',system-ui,sans-serif;
+  background:linear-gradient(160deg,#fff5f6 0%,#fff 60%);
+  color:var(--ink);min-height:100vh;
+  padding:28px 16px 48px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.card{
+  max-width:420px;margin:0 auto;background:#fff;
+  border:1px solid var(--line);border-radius:22px;
+  padding:28px 24px 24px;
+  box-shadow:0 16px 56px -20px rgba(255,91,110,.15),0 4px 16px rgba(0,0,0,.06);
+}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}
+.brand{font-size:15px;font-weight:800;letter-spacing:-.3px}
+.brand em{color:var(--accent);font-style:normal}
+.chip{
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
+  background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-bd);
+}
+.sec-title{
+  font-size:10px;font-weight:800;letter-spacing:.9px;color:var(--sub);
+  text-transform:uppercase;margin-bottom:14px;
+}
+.block{margin-bottom:18px}
+.lbl{display:block;font-size:13px;font-weight:700;margin-bottom:8px;color:var(--ink)}
+.sub-lbl{font-size:11px;color:var(--sub);font-weight:400;margin-left:4px}
+input.fld,textarea,select{
+  width:100%;padding:11px 14px;
+  border:1.5px solid var(--line);border-radius:10px;
+  font-size:14px;outline:none;background:var(--field);
+  color:var(--ink);font-family:inherit;transition:border-color .15s;
+}
+input.fld:focus,textarea:focus,select:focus{border-color:var(--ink);background:#fff}
+textarea{resize:vertical;min-height:66px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.anniv{display:flex;gap:8px}
+.anniv input{text-align:center}
+.divider{height:1px;background:var(--line);margin:6px 0 20px}
+.dropzone{
+  display:block;border:1.5px dashed var(--line);border-radius:12px;
+  background:#fff;cursor:pointer;overflow:hidden;transition:border-color .2s;
+}
+.dropzone:hover{border-color:#bbb}
+.drop-inner{padding:22px 16px;text-align:center}
+.drop-icon{font-size:22px;color:#ccc;margin-bottom:5px}
+.drop-text{font-size:13px;color:var(--sub)}
+.drop-hint{font-size:11px;color:#bbb;margin-top:4px;line-height:1.5}
+.preview-img{width:100%;max-height:200px;object-fit:cover;display:block}
+
+/* 도트 */
+.dots-wrap{margin-bottom:16px}
+.dots{display:flex;gap:8px;justify-content:center}
+.dot{
+  width:32px;height:32px;border-radius:50%;
+  border:1.5px solid var(--line);background:#fff;
+  color:var(--sub);font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .15s;font-family:inherit;
+}
+.dot:hover{border-color:#bbb}
+.dot.active{border-color:var(--ink);background:#f5f5f5;color:var(--ink)}
+.dot.done{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* 씬 카드 */
+.scene-card{
+  background:var(--field);border:1.5px solid var(--line);
+  border-radius:14px;padding:18px 18px 16px;margin-bottom:18px;
+}
+.scene-num{
+  font-size:10px;font-weight:800;color:var(--accent);
+  letter-spacing:.7px;margin-bottom:10px;
+}
+.sentence-row{
+  display:flex;flex-wrap:wrap;align-items:center;gap:5px;
+  margin-bottom:14px;line-height:2.2;
+}
+.s-text{font-size:14px;color:var(--ink);font-weight:500}
+.blank-inp{
+  display:inline-block;border:none;
+  border-bottom:2px solid var(--accent);
+  background:transparent;font-size:14px;font-weight:700;
+  color:var(--accent);font-family:inherit;outline:none;
+  padding:2px 4px;min-width:60px;text-align:center;
+  transition:border-color .15s;
+}
+.blank-inp:focus{border-bottom-color:var(--ink);color:var(--ink)}
+.blank-inp::placeholder{color:#ddd;font-weight:400}
+
+/* 네비 */
+.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.nav-btn{
+  background:#fff;border:1.5px solid var(--line);border-radius:10px;
+  padding:9px 18px;font-size:14px;font-weight:600;
+  cursor:pointer;color:var(--ink);font-family:inherit;transition:all .15s;
+}
+.nav-btn:hover:not(:disabled){border-color:#999}
+.nav-btn:disabled{opacity:.28;cursor:default}
+.nav-lbl{font-size:12px;color:var(--sub);font-weight:600}
+
+/* 진행바 */
+.prog-wrap{margin-bottom:16px}
+.prog-bg{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .35s ease}
+.prog-txt{font-size:11px;color:var(--sub);margin-top:5px;text-align:right}
+
+/* 미리보기 버튼 */
+.preview-nav-btn{
+  width:100%;padding:13px;margin-bottom:14px;
+  border:1.5px solid var(--line);border-radius:12px;
+  font-size:14px;font-weight:700;cursor:pointer;
+  background:#fff;font-family:inherit;color:var(--ink);
+  transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.preview-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* CTA 버튼들 */
+.cta-btn{
+  width:100%;padding:15px;border:none;border-radius:14px;
+  background:var(--accent);color:#fff;font-size:16px;font-weight:800;
+  cursor:pointer;font-family:inherit;transition:opacity .15s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 20px rgba(255,91,110,.3);
+}
+.cta-btn:hover:not(:disabled){opacity:.88}
+.cta-btn:disabled{opacity:.38;cursor:default;box-shadow:none}
+.cta-btn.secondary{
+  background:#fff;color:var(--ink);border:1.5px solid var(--line);
+  box-shadow:none;font-size:14px;padding:12px;
+}
+.cta-btn.secondary:hover:not(:disabled){border-color:#999}
+
+/* ── 연락처 화면 (step-contact) ── */
+.contact-screen{padding:8px 0}
+.contact-back{background:none;border:none;font-size:13px;color:var(--sub);cursor:pointer;font-family:inherit;margin-bottom:20px;display:flex;align-items:center;gap:4px}
+.contact-back:hover{color:var(--ink)}
+.contact-hero{text-align:center;margin-bottom:28px}
+.contact-hero-icon{font-size:40px;margin-bottom:12px}
+.contact-hero-title{font-size:18px;font-weight:800;margin-bottom:6px}
+.contact-hero-desc{font-size:13px;color:var(--sub);line-height:1.7}
+.contact-form{background:var(--field);border-radius:14px;padding:20px;margin-bottom:20px}
+.contact-form .block{margin-bottom:14px}
+.contact-form .block:last-child{margin-bottom:0}
+
+/* ── 로딩 화면 ── */
+.loading-wrap{text-align:center;padding:12px 0 24px}
+.loading-icon{font-size:44px;margin-bottom:16px;animation:float 2s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.loading-title{font-size:18px;font-weight:800;margin-bottom:6px}
+.loading-sub{font-size:13px;color:var(--sub);line-height:1.6;margin-bottom:28px}
+.steps-list{text-align:left;margin-bottom:28px}
+.step-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;border-radius:12px;margin-bottom:8px;
+  background:var(--field);border:1.5px solid var(--line);transition:all .3s;
+}
+.step-item.active{background:#fff5f6;border-color:var(--accent-bd)}
+.step-item.complete{background:var(--green-bg);border-color:var(--green-bd)}
+.step-item.error{background:#fff1f1;border-color:#fca5a5}
+.step-icon{
+  width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;flex-shrink:0;background:var(--line);
+}
+.step-item.active .step-icon{background:var(--accent-bd);animation:pulse-ring 1.2s infinite}
+.step-item.complete .step-icon{background:var(--green-bd)}
+.step-item.error .step-icon{background:#fca5a5}
+@keyframes pulse-ring{0%,100%{opacity:1}50%{opacity:.5}}
+.step-info{flex:1}
+.step-label{font-size:13px;font-weight:700;color:var(--ink)}
+.step-desc{font-size:11px;color:var(--sub);margin-top:1px}
+.step-status{font-size:11px;font-weight:700}
+.step-item.active .step-status{color:var(--accent)}
+.step-item.complete .step-status{color:var(--green)}
+.step-item.error .step-status{color:#ef4444}
+.progress-overall{
+  background:var(--field);border-radius:12px;padding:14px 16px;margin-bottom:8px;
+}
+.progress-overall-label{font-size:12px;color:var(--sub);margin-bottom:6px;display:flex;justify-content:space-between}
+.progress-overall-bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.progress-overall-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .5s ease}
+.progress-time{font-size:11px;color:#bbb;text-align:center;margin-top:6px}
+
+/* 씬 미리보기 */
+.preview-scene-card{border:1.5px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.preview-scene-num{font-size:10px;font-weight:800;color:var(--accent);letter-spacing:.6px;margin-bottom:8px}
+.preview-scene-sentence{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:12px;line-height:1.5}
+.preview-photo{width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block}
+.preview-no-photo{height:70px;background:var(--field);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#bbb;border:1px dashed var(--line)}
+.preview-memo{font-size:12px;color:var(--sub);margin-top:8px}
+
+/* 완료 화면 */
+.complete-wrap{text-align:center;padding:8px 0}
+.complete-emoji{font-size:44px;margin-bottom:14px}
+.complete-title{font-size:20px;font-weight:800;margin-bottom:6px}
+.complete-sub{font-size:14px;color:var(--sub);line-height:1.7;margin-bottom:24px}
+.video-wrap{
+  background:#000;border-radius:14px;overflow:hidden;
+  margin-bottom:20px;position:relative;aspect-ratio:16/9;
+  border:1px solid var(--line);
+}
+.video-wrap video{width:100%;height:100%;object-fit:cover;display:block}
+.video-placeholder{
+  width:100%;height:100%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;color:#fff;
+  background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);
+}
+.video-placeholder-icon{font-size:36px;margin-bottom:10px}
+.video-placeholder-txt{font-size:13px;opacity:.7}
+.share-row{display:flex;gap:8px;margin-bottom:16px}
+.share-btn{
+  flex:1;padding:11px;border-radius:10px;border:1.5px solid var(--line);
+  background:#fff;font-size:13px;font-weight:700;cursor:pointer;
+  font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.share-btn:hover{border-color:#999}
+.upsell-box{
+  background:linear-gradient(135deg,#fff0f2,#fff5f6);
+  border:1.5px solid var(--accent-bd);border-radius:14px;
+  padding:18px;text-align:center;margin-bottom:16px;
+}
+.upsell-title{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.upsell-sub{font-size:12px;color:var(--sub);margin-bottom:14px;line-height:1.6}
+.upsell-price{font-size:22px;font-weight:800;color:var(--accent);margin-bottom:14px}
+.upsell-price span{font-size:13px;font-weight:500;color:var(--sub);text-decoration:line-through;margin-left:6px}
+.error-box{
+  background:#fff1f1;border:1.5px solid #fca5a5;border-radius:12px;
+  padding:16px;text-align:center;margin-bottom:16px;
+}
+.error-icon{font-size:28px;margin-bottom:8px}
+.error-title{font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px}
+.error-desc{font-size:12px;color:#999;line-height:1.5}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#e0e0e0;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="topbar">
+    <span class="brand">AI <em>프로포즈</em> 영상</span>
+    <span class="chip" id="topChip">무료 체험</span>
+  </div>
+
+  <!-- ════ STEP 1: 기본 정보 ════ -->
+  <div id="step1">
+    <div class="sec-title">기본 정보</div>
+    <div class="block">
+      <label class="lbl">남자 / 여자 이름</label>
+      <div class="grid2">
+        <input class="fld" id="groom" placeholder="남자 이름">
+        <input class="fld" id="bride" placeholder="여자 이름">
+      </div>
+    </div>
+    <div class="block">
+      <label class="lbl">기념일 <span class="sub-lbl">(선택)</span></label>
+      <div class="anniv">
+        <input class="fld" id="annivY" placeholder="년" inputmode="numeric" maxlength="4">
+        <input class="fld" id="annivM" placeholder="월" inputmode="numeric" maxlength="2">
+        <input class="fld" id="annivD" placeholder="일" inputmode="numeric" maxlength="2">
+      </div>
+    </div>
+    <div class="block">
+      <label class="lbl">커플 사진 <span class="sub-lbl">(선택 · 퀄리티 향상)</span></label>
+      <label class="dropzone">
+        <input type="file" accept="image/*" id="couplePhotoInput" style="display:none" onchange="handleCouplePhoto(event)">
+        <div id="coupleDropArea">
+          <div class="drop-inner">
+            <div class="drop-icon">📷</div>
+            <div class="drop-text">함께 찍은 사진 업로드</div>
+            <div class="drop-hint">두 사람의 특징을 AI가 분석해 캐릭터를 만들어요</div>
+          </div>
+        </div>
+      </label>
+    </div>
+    <div class="divider"></div>
+    <button class="cta-btn" onclick="goStep2()">다음 — 씬 입력 →</button>
+  </div>
+
+  <!-- ════ STEP 2: 씬 입력 (1~3) ════ -->
+  <div id="step2" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="sec-title" style="margin-bottom:0">씬 입력 (1~3)</div>
+      <button onclick="backStep1()" style="background:none;border:none;font-size:13px;color:var(--sub);cursor:pointer;font-family:inherit;">← 수정</button>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-bg"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+      <div class="prog-txt" id="progTxt">0 / 3 완료</div>
+    </div>
+    <div class="dots-wrap">
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="scene-card">
+      <div class="scene-num" id="sceneNum">SCENE 01 · 첫 만남</div>
+      <div class="sentence-row" id="sentenceRow"></div>
+      <div class="block" style="margin-bottom:14px">
+        <div class="lbl" style="margin-bottom:8px">사진 첨부 <span class="sub-lbl">(선택)</span></div>
+        <label class="dropzone">
+          <input type="file" accept="image/*" id="scenePhotoInput" style="display:none" onchange="handleScenePhoto(event)">
+          <div id="sceneDropArea"></div>
+        </label>
+      </div>
+      <div class="block" style="margin-bottom:0">
+        <label class="lbl">추가 메모 <span class="sub-lbl">(선택)</span></label>
+        <textarea id="actionInput" rows="2" placeholder="예: 분위기, 의상, 표정 등 자유롭게 입력"></textarea>
+      </div>
+    </div>
+    <!-- 씬 완료 시 노출: 미리보기 버튼 + 제작 시작 버튼 -->
+    <div id="sceneCompleteWrap" style="display:none">
+      <button class="preview-nav-btn" onclick="goScenePreview()">👁 씬 구성 미리보기</button>
+      <button class="cta-btn" onclick="goContact()">✨ 무료 영상 제작 시작</button>
+    </div>
+    <div class="nav" style="margin-top:16px">
+      <button class="nav-btn" id="prevBtn" onclick="navigate(-1)">← 이전</button>
+      <span class="nav-lbl" id="navLbl">SCENE 1 / 3</span>
+      <button class="nav-btn" id="nextBtn" onclick="navigate(1)">다음 →</button>
+    </div>
+  </div>
+
+  <!-- ════ STEP 2-5: 씬 구성 미리보기 ════ -->
+  <div id="stepScenePreview" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div style="font-size:14px;font-weight:800;">씬 구성 확인</div>
+      <button onclick="closeScenePreview()" style="background:none;border:none;font-size:13px;color:var(--sub);cursor:pointer;font-family:inherit;">← 돌아가기</button>
+    </div>
+    <div id="scenePreviewCards"></div>
+    <button class="cta-btn secondary" onclick="closeScenePreview()" style="margin-top:4px">수정하기</button>
+  </div>
+
+  <!-- ════ STEP 3: 연락처 입력 ════ -->
+  <div id="stepContact" style="display:none">
+    <button class="contact-back" onclick="backToStep2()">← 씬 수정</button>
+    <div class="contact-hero">
+      <div class="contact-hero-icon">💌</div>
+      <div class="contact-hero-title">거의 다 됐어요!</div>
+      <div class="contact-hero-desc">정식 영상 주문 안내를 위해<br>연락처를 남겨주세요.</div>
+    </div>
+    <div class="contact-form">
+      <div class="block">
+        <label class="lbl">이름</label>
+        <input class="fld" id="contactName" placeholder="이름 입력" oninput="updateContactBtn()">
+      </div>
+      <div class="block">
+        <label class="lbl">전화번호</label>
+        <input class="fld" id="contactPhone" placeholder="010-0000-0000" inputmode="tel" oninput="updateContactBtn()">
+      </div>
+    </div>
+    <button class="cta-btn" id="contactSubmitBtn" onclick="startVideoMake()" disabled>
+      🎬 영상 제작 시작
+    </button>
+    <div style="font-size:11px;color:#bbb;text-align:center;margin-top:8px">이름과 전화번호 입력 후 활성화됩니다</div>
+  </div>
+
+  <!-- ════ 로딩 화면 ════ -->
+  <div id="stepLoading" style="display:none">
+    <div class="loading-wrap">
+      <div class="loading-icon">🎬</div>
+      <div class="loading-title">영상 제작 중이에요</div>
+      <div class="loading-sub">AI가 여러분만의 디즈니 스타일<br>프로포즈 영상을 만들고 있어요.<br>잠시만 기다려주세요 ✨</div>
+      <div class="progress-overall">
+        <div class="progress-overall-label">
+          <span>전체 진행률</span>
+          <span id="overallPct">0%</span>
+        </div>
+        <div class="progress-overall-bar">
+          <div class="progress-overall-fill" id="overallFill" style="width:0%"></div>
+        </div>
+        <div class="progress-time" id="progressTime">예상 소요 시간: 약 2~3분</div>
+      </div>
+      <div class="steps-list" id="stepsList">
+        <div class="step-item" id="ls-0">
+          <div class="step-icon">✍️</div>
+          <div class="step-info"><div class="step-label">씬 분석 & 프롬프트 생성</div><div class="step-desc">입력된 씬 내용을 AI가 분석합니다</div></div>
+          <div class="step-status" id="ls-0-status">대기</div>
+        </div>
+        <div class="step-item" id="ls-1">
+          <div class="step-icon">🎨</div>
+          <div class="step-info"><div class="step-label">디즈니 캐릭터 이미지 생성</div><div class="step-desc">사진을 디즈니 스타일로 변환합니다</div></div>
+          <div class="step-status" id="ls-1-status">대기</div>
+        </div>
+        <div class="step-item" id="ls-2">
+          <div class="step-icon">🎬</div>
+          <div class="step-info"><div class="step-label">씬 1 영상 생성</div><div class="step-desc">첫 번째 씬 영상을 제작합니다</div></div>
+          <div class="step-status" id="ls-2-status">대기</div>
+        </div>
+        <div class="step-item" id="ls-3">
+          <div class="step-icon">🎬</div>
+          <div class="step-info"><div class="step-label">씬 2 영상 생성</div><div class="step-desc">두 번째 씬 영상을 제작합니다</div></div>
+          <div class="step-status" id="ls-3-status">대기</div>
+        </div>
+        <div class="step-item" id="ls-4">
+          <div class="step-icon">🎬</div>
+          <div class="step-info"><div class="step-label">씬 3 영상 생성</div><div class="step-desc">세 번째 씬 영상을 제작합니다</div></div>
+          <div class="step-status" id="ls-4-status">대기</div>
+        </div>
+        <div class="step-item" id="ls-5">
+          <div class="step-icon">🔗</div>
+          <div class="step-info"><div class="step-label">영상 이어붙이기</div><div class="step-desc">3개의 씬을 하나로 합칩니다</div></div>
+          <div class="step-status" id="ls-5-status">대기</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ 완료 & 영상 재생 ════ -->
+  <div id="stepComplete" style="display:none">
+    <div class="complete-wrap">
+      <div class="complete-emoji">💍</div>
+      <div class="complete-title">영상이 완성됐어요!</div>
+      <div class="complete-sub">3씬 미리보기 영상이 완성됐습니다.<br>전체 10씬 정식 영상도 제작해보세요!</div>
+    </div>
+    <div class="video-wrap" id="videoWrap">
+      <div class="video-placeholder">
+        <div class="video-placeholder-icon">🎬</div>
+        <div class="video-placeholder-txt">영상을 준비 중입니다...</div>
+      </div>
+    </div>
+    <div class="share-row">
+      <button class="share-btn" onclick="downloadVideo()">⬇️ 저장</button>
+      <button class="share-btn" onclick="shareVideo()">🔗 링크 공유</button>
+    </div>
+    <div class="upsell-box">
+      <div class="upsell-title">🏰 전체 10씬 정식 영상</div>
+      <div class="upsell-sub">첫 만남부터 프로포즈 순간까지<br>완성된 스토리로 담아드립니다.</div>
+      <div class="upsell-price">250,000원 <span>350,000원</span></div>
+      <button class="cta-btn" onclick="goFullOrder()" style="font-size:14px;padding:13px">💍 정식 영상 주문하기</button>
+    </div>
+    <div class="error-box" id="errorBox" style="display:none">
+      <div class="error-icon">⚠️</div>
+      <div class="error-title" id="errorTitle">영상 생성에 실패했어요</div>
+      <div class="error-desc" id="errorDesc">잠시 후 다시 시도해주세요.</div>
+      <button class="cta-btn" onclick="retryMake()" style="margin-top:12px;font-size:13px;padding:11px">다시 시도</button>
+    </div>
+    <button class="cta-btn secondary" onclick="restart()" style="margin-top:12px">처음으로 돌아가기</button>
+  </div>
+
+</div><!-- /card -->
+
+<script>
+// ══════════════════════════════════════════
+// 보안: API 키는 절대 소스코드에 직접 기재하지 않습니다.
+// 운영 방식: Vercel 환경변수에 저장 → 서버리스 함수(/api/*)가 호출
+// 클라이언트(브라우저)에서는 /api/* 엔드포인트만 호출하며
+// API 키는 서버에서만 존재하고 절대 클라이언트로 전달되지 않습니다.
+// ══════════════════════════════════════════
+
+// ── 테스트 더미 데이터 (씬 자동 입력용)
+var TEST_DUMMY = {
+  groom:"준서", bride:"지아",
+  annivY:"2022", annivM:"03", annivD:"14",
+  scenes:[
+    {blanks:["대학교 도서관"], action:"눈이 마주치고 서로 어색하게 웃는 장면"},
+    {blanks:["한강 카페"],     action:"커피 들고 나란히 걷다가 손 잡는 장면"},
+    {blanks:["기차"],          action:"창밖 풍경 보며 기대는 설레는 분위기"}
+  ]
+};
+
+// ── 씬 템플릿 (1~3)
+var SCENE_TEMPLATES = [
+  { id:1, label:"첫 만남",
+    parts:["처음 만난 ",", 우연히 눈이 마주치는 순간"],
+    blanks:[{ph:"장소 또는 상황", w:130}] },
+  { id:2, label:"첫 데이트",
+    parts:["첫번째 데이트 ","에서 손을 잡는 순간"],
+    blanks:[{ph:"장소", w:100}] },
+  { id:3, label:"첫 여행",
+    parts:["","을 타고 간 첫 여행"],
+    blanks:[{ph:"교통수단 (예: 기차, 비행기, 차)", w:200}] }
+];
+
+// ── 상태
+var current = 0;
+var scenes = makeScenes();
+var couplePhotoUrl = "";
+var finalVideoUrl = "";
+
+function makeScenes(){
+  return SCENE_TEMPLATES.map(function(t){
+    return {blanks:t.blanks.map(function(){return "";}), action:"", photoUrl:"", photoFile:null};
+  });
+}
+
+// ── 유틸
+function el(id){return document.getElementById(id);}
+function esc(s){
+  return String(s||"")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function show(id){el(id).style.display="block";}
+function hide(id){el(id).style.display="none";}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+function buildSentence(idx){
+  var t=SCENE_TEMPLATES[idx], s=scenes[idx];
+  var str=t.parts[0];
+  for(var i=0;i<t.blanks.length;i++){
+    str+=(s.blanks[i]||"("+t.blanks[i].ph+")")+t.parts[i+1];
+  }
+  return str;
+}
+function isSceneDone(idx){
+  return scenes[idx].blanks.every(function(v){return v.trim()!=="";});
+}
+function allScenesDone(){
+  return SCENE_TEMPLATES.every(function(_,i){return isSceneDone(i);});
+}
+function hasContact(){
+  return el("contactName").value.trim()!=="" && el("contactPhone").value.trim()!=="";
+}
+
+// ── 연락처 버튼 상태
+function updateContactBtn(){
+  el("contactSubmitBtn").disabled = !hasContact();
+}
+
+// ══════════════════════════════════════════
+// 테스트 더미 데이터 자동 입력 (개발 전용)
+// 배포 시 이 함수는 호출되지 않습니다.
+// ══════════════════════════════════════════
+function fillDummyData(){
+  el("groom").value   = TEST_DUMMY.groom;
+  el("bride").value   = TEST_DUMMY.bride;
+  el("annivY").value  = TEST_DUMMY.annivY;
+  el("annivM").value  = TEST_DUMMY.annivM;
+  el("annivD").value  = TEST_DUMMY.annivD;
+  TEST_DUMMY.scenes.forEach(function(sc,i){
+    scenes[i].blanks = sc.blanks.slice();
+    scenes[i].action = sc.action;
+  });
+  alert("테스트 데이터 입력 완료! 다음 버튼을 눌러 씬 화면으로 이동하세요.");
+}
+
+// ══════════════════════════════════════════
+// STEP 이동
+// ══════════════════════════════════════════
+function goStep2(){
+  if(!el("groom").value.trim()||!el("bride").value.trim()){
+    alert("남자/여자 이름을 입력해 주세요."); return;
+  }
+  ["annivY","annivM","annivD"].forEach(function(id){
+    el(id).oninput=function(e){e.target.value=e.target.value.replace(/\D/g,"");};
+  });
+  hide("step1"); show("step2");
+  el("topChip").textContent="STEP 2/3";
+  current=0; render();
+}
+function backStep1(){
+  hide("step2"); show("step1");
+  el("topChip").textContent="무료 체험";
+}
+
+// 씬 완료 → 연락처 화면으로
+function goContact(){
+  saveCurrent();
+  if(!allScenesDone()){alert("씬 1~3을 모두 입력해주세요."); return;}
+  hide("step2"); show("stepContact");
+  el("topChip").textContent="STEP 3/3";
+  el("contactName").focus();
+}
+// 연락처 화면 → 씬 입력 복귀
+function backToStep2(){
+  hide("stepContact"); show("step2");
+  el("topChip").textContent="STEP 2/3";
+}
+
+// ══════════════════════════════════════════
+// 씬 렌더
+// ══════════════════════════════════════════
+function renderDots(){
+  var wrap=el("dots"); wrap.innerHTML="";
+  SCENE_TEMPLATES.forEach(function(t,i){
+    var btn=document.createElement("button");
+    btn.className="dot"+(i===current?" active":"")+(isSceneDone(i)?" done":"");
+    btn.textContent=i+1;
+    (function(idx){btn.onclick=function(){saveCurrent();current=idx;render();};})(i);
+    wrap.appendChild(btn);
+  });
+}
+function renderSentenceRow(){
+  var t=SCENE_TEMPLATES[current], s=scenes[current];
+  var row=el("sentenceRow"); row.innerHTML="";
+  t.parts.forEach(function(part,pi){
+    if(part){var sp=document.createElement("span");sp.className="s-text";sp.textContent=part;row.appendChild(sp);}
+    if(pi<t.blanks.length){
+      var b=t.blanks[pi];
+      var inp=document.createElement("input");
+      inp.className="blank-inp";inp.type="text";inp.placeholder=b.ph;
+      inp.value=scenes[current].blanks[pi]||"";inp.style.width=b.w+"px";
+      (function(bIdx,inputEl){
+        inputEl.oninput=function(){scenes[current].blanks[bIdx]=this.value;renderUI();};
+      })(pi,inp);
+      row.appendChild(inp);
+    }
+  });
+}
+function renderScenePhoto(){
+  var s=scenes[current], area=el("sceneDropArea");
+  if(s.photoUrl){
+    area.innerHTML='<img src="'+s.photoUrl+'" class="preview-img" alt="씬 사진">';
+  } else {
+    area.innerHTML='<div class="drop-inner"><div class="drop-icon">＋</div><div class="drop-text">사진 첨부</div><div class="drop-hint">사진을 넣으면 더 실감나는 영상이 만들어져요</div></div>';
+  }
+}
+function renderUI(){
+  var done=SCENE_TEMPLATES.filter(function(_,i){return isSceneDone(i);}).length;
+  el("progFill").style.width=(done/SCENE_TEMPLATES.length*100)+"%";
+  el("progTxt").textContent=done+" / "+SCENE_TEMPLATES.length+" 완료";
+  // 씬 완료 시 버튼 그룹 노출
+  el("sceneCompleteWrap").style.display=allScenesDone()?"block":"none";
+  renderDots();
+}
+function render(){
+  var t=SCENE_TEMPLATES[current];
+  el("sceneNum").textContent="SCENE "+String(current+1).padStart(2,"0")+" · "+t.label;
+  renderSentenceRow();
+  renderScenePhoto();
+  el("actionInput").value=scenes[current].action||"";
+  el("navLbl").textContent="SCENE "+(current+1)+" / "+SCENE_TEMPLATES.length;
+  el("prevBtn").disabled=(current===0);
+  el("nextBtn").disabled=(current===SCENE_TEMPLATES.length-1);
+  renderUI();
+}
+function saveCurrent(){
+  scenes[current].action=el("actionInput").value;
+}
+function navigate(dir){
+  saveCurrent(); current=clamp(current+dir,0,SCENE_TEMPLATES.length-1); render();
+}
+
+// ── 사진
+function handleCouplePhoto(event){
+  var f=event.target.files[0]; if(!f) return;
+  couplePhotoUrl=URL.createObjectURL(f);
+  el("coupleDropArea").innerHTML='<img src="'+couplePhotoUrl+'" class="preview-img" style="max-height:140px;" alt="커플 사진">';
+}
+function handleScenePhoto(event){
+  var f=event.target.files[0]; if(!f) return;
+  scenes[current].photoUrl=URL.createObjectURL(f);
+  scenes[current].photoFile=f;
+  renderScenePhoto();
+}
+
+// ── 씬 미리보기
+function goScenePreview(){
+  saveCurrent();
+  var html="";
+  SCENE_TEMPLATES.forEach(function(t,i){
+    var s=scenes[i];
+    html+='<div class="preview-scene-card">';
+    html+='<div class="preview-scene-num">SCENE '+String(i+1).padStart(2,"0")+" · "+esc(t.label)+'</div>';
+    html+='<div class="preview-scene-sentence">'+esc(buildSentence(i))+'</div>';
+    html+=s.photoUrl
+      ?'<img src="'+s.photoUrl+'" class="preview-photo" alt="">'
+      :'<div class="preview-no-photo">📷 사진 없음 — AI 자동 생성</div>';
+    if(s.action) html+='<div class="preview-memo">📝 '+esc(s.action)+'</div>';
+    html+='</div>';
+  });
+  el("scenePreviewCards").innerHTML=html;
+  hide("step2"); show("stepScenePreview");
+  el("topChip").textContent="씬 미리보기";
+}
+function closeScenePreview(){
+  hide("stepScenePreview"); show("step2");
+  el("topChip").textContent="STEP 2/3";
+}
+
+// ══════════════════════════════════════════
+// 로딩 UI
+// ══════════════════════════════════════════
+function setStep(idx, state){
+  var item=el("ls-"+idx), stat=el("ls-"+idx+"-status");
+  if(!item) return;
+  var icons=["✍️","🎨","🎬","🎬","🎬","🔗"];
+  var txt={active:"진행 중...", complete:"완료 ✓", error:"실패 ✗", "":"대기"};
+  item.className="step-item"+(state?" "+state:"");
+  item.querySelector(".step-icon").textContent=state==="complete"?"✅":state==="error"?"❌":icons[idx];
+  stat.textContent=txt[state]||"대기";
+}
+function setOverall(pct, msg){
+  el("overallFill").style.width=pct+"%";
+  el("overallPct").textContent=pct+"%";
+  if(msg) el("progressTime").textContent=msg;
+}
+
+// ══════════════════════════════════════════
+// 영상 제작 파이프라인
+// 모든 API 호출은 /api/* 서버리스 함수를 통해 처리됩니다.
+// API 키는 Vercel 환경변수(서버)에만 존재하며
+// 브라우저에는 절대 전달되지 않습니다.
+// ══════════════════════════════════════════
+async function generatePrompts(){
+  var groom=el("groom").value.trim(), bride=el("bride").value.trim();
+  var sentences=SCENE_TEMPLATES.map(function(_,i){return buildSentence(i);});
+  var memos=scenes.map(function(s){return s.action||"";});
+
+  // /api/generate-prompts : 서버에서 Anthropic API 호출
+  var resp=await fetch("/api/generate-prompts",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({groom:groom, bride:bride, sentences:sentences, memos:memos,
+      hasPhoto:!!couplePhotoUrl||scenes.some(function(s){return !!s.photoUrl;})})
+  });
+  if(!resp.ok){
+    var e=await resp.json().catch(function(){return{};});
+    throw new Error(e.error||"프롬프트 생성 실패 ("+resp.status+")");
+  }
+  return resp.json();
+}
+
+async function generateCharacterImage(prompt){
+  // /api/generate-image : 서버에서 Higgsfield API 호출
+  var resp=await fetch("/api/generate-image",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({prompt:prompt})
+  });
+  if(!resp.ok) throw new Error("캐릭터 이미지 생성 실패");
+  var data=await resp.json();
+  return data.url||null;
+}
+
+async function generateSceneVideo(imageUrl, prompt, sceneIdx){
+  // /api/generate-video : 서버에서 Higgsfield API 호출
+  var resp=await fetch("/api/generate-video",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({imageUrl:imageUrl, prompt:prompt, sceneIdx:sceneIdx})
+  });
+  if(!resp.ok) throw new Error("씬 "+(sceneIdx+1)+" 영상 생성 실패");
+  var data=await resp.json();
+  var jobId=data.jobId||data.id;
+  if(!jobId) throw new Error("작업 ID를 받지 못했습니다.");
+  return await pollVideoJob(jobId, sceneIdx);
+}
+
+async function pollVideoJob(jobId, sceneIdx){
+  for(var i=0;i<60;i++){
+    await sleep(5000);
+    var resp=await fetch("/api/video-status?jobId="+encodeURIComponent(jobId));
+    if(!resp.ok) continue;
+    var data=await resp.json();
+    if(data.status==="done") return data.url||null;
+    if(data.status==="error") throw new Error("씬 "+(sceneIdx+1)+" 영상 생성 실패");
+  }
+  throw new Error("씬 "+(sceneIdx+1)+" 시간 초과");
+}
+
+async function mergeVideos(videoUrls){
+  var resp=await fetch("/api/merge",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({videos:videoUrls})
+  });
+  if(!resp.ok){
+    console.warn("merge API 없음 — 씬1로 대체");
+    return videoUrls[0];
+  }
+  var data=await resp.json();
+  return data.url||videoUrls[0];
+}
+
+// ── 메인 실행
+async function startVideoMake(){
+  if(!hasContact()){alert("이름과 전화번호를 입력해주세요."); return;}
+  hide("stepContact"); show("stepLoading");
+  el("topChip").textContent="제작 중";
+  el("errorBox").style.display="none";
+  el("videoWrap").innerHTML='<div class="video-placeholder"><div class="video-placeholder-icon">🎬</div><div class="video-placeholder-txt">영상을 준비 중입니다...</div></div>';
+  for(var i=0;i<6;i++) setStep(i,"");
+  setOverall(0,"예상 소요 시간: 약 2~3분");
+
+  try {
+    setStep(0,"active"); setOverall(5,"씬 분석 중...");
+    var prompts=await generatePrompts();
+    setStep(0,"complete"); setOverall(20,"캐릭터 이미지 생성 중...");
+
+    setStep(1,"active");
+    var charImageUrl=null;
+    try{charImageUrl=await generateCharacterImage(prompts.characterPrompt);}
+    catch(e){console.warn("이미지 생성 실패, 사진 대체:", e.message); charImageUrl=couplePhotoUrl||scenes[0].photoUrl||null;}
+    setStep(1,"complete"); setOverall(35,"씬 영상 생성 중...");
+
+    var videoUrls=[], pcts=[35,50,65,82];
+    for(var si=0;si<3;si++){
+      setStep(si+2,"active"); setOverall(pcts[si],"씬 "+(si+1)+" 영상 생성 중...");
+      var url=await generateSceneVideo(scenes[si].photoUrl||charImageUrl, prompts.scenePrompts[si], si);
+      videoUrls.push(url);
+      setStep(si+2,"complete"); setOverall(pcts[si+1],"씬 "+(si+1)+" 완료");
+    }
+
+    setStep(5,"active"); setOverall(85,"영상 이어붙이는 중...");
+    finalVideoUrl=await mergeVideos(videoUrls);
+    setStep(5,"complete"); setOverall(100,"완성! 🎉");
+    await sleep(700);
+    showComplete(finalVideoUrl);
+    saveContact(finalVideoUrl);
+
+  } catch(err){
+    console.error("오류:", err);
+    showError(err.message);
+  }
+}
+
+function showComplete(videoUrl){
+  hide("stepLoading"); show("stepComplete");
+  el("topChip").textContent="완성 🎉";
+  var wrap=el("videoWrap");
+  if(videoUrl){
+    wrap.innerHTML='<video controls autoplay loop playsinline style="width:100%;height:100%;object-fit:cover;"><source src="'+videoUrl+'" type="video/mp4">영상을 재생할 수 없습니다.</video>';
+  }
+}
+function showError(msg){
+  hide("stepLoading"); show("stepComplete");
+  el("topChip").textContent="오류";
+  el("errorBox").style.display="block";
+  el("errorTitle").textContent="영상 생성에 실패했어요";
+  el("errorDesc").textContent=msg||"잠시 후 다시 시도해주세요.";
+}
+function retryMake(){startVideoMake();}
+
+// ── 연락처 저장 (서버리스 함수로 전송)
+function saveContact(videoUrl){
+  var contact={
+    name:el("contactName").value.trim(),
+    phone:el("contactPhone").value.trim(),
+    groom:el("groom").value.trim(),
+    bride:el("bride").value.trim(),
+    scenes:SCENE_TEMPLATES.map(function(_,i){return buildSentence(i);}),
+    videoUrl:videoUrl,
+    createdAt:new Date().toISOString()
+  };
+  // /api/save-contact : 서버에서 Google Sheets 또는 Airtable 저장
+  fetch("/api/save-contact",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(contact)
+  }).catch(function(e){console.warn("연락처 저장 실패:", e.message);});
+}
+
+function downloadVideo(){
+  if(!finalVideoUrl){alert("영상 URL이 없습니다."); return;}
+  var a=document.createElement("a");
+  a.href=finalVideoUrl; a.download="proposal_preview.mp4";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function shareVideo(){
+  if(!finalVideoUrl){alert("영상 URL이 없습니다."); return;}
+  if(navigator.share){
+    navigator.share({title:"AI 프로포즈 영상 미리보기", url:finalVideoUrl});
+  } else {
+    navigator.clipboard.writeText(finalVideoUrl)
+      .then(function(){alert("링크가 복사됐습니다!");});
+  }
+}
+function goFullOrder(){
+  alert("정식 주문 페이지로 이동합니다.\n(카페24 상품 페이지 연동 후 활성화)");
+}
+
+function restart(){
+  scenes=makeScenes(); current=0; couplePhotoUrl=""; finalVideoUrl="";
+  ["stepComplete","stepLoading","stepScenePreview","stepContact","step2"].forEach(hide);
+  show("step1");
+  el("topChip").textContent="무료 체험";
+  ["groom","bride","annivY","annivM","annivD","contactName","contactPhone"].forEach(function(id){el(id).value="";});
+  el("coupleDropArea").innerHTML='<div class="drop-inner"><div class="drop-icon">📷</div><div class="drop-text">함께 찍은 사진 업로드</div><div class="drop-hint">두 사람의 특징을 AI가 분석해 캐릭터를 만들어요</div></div>';
+}
+</script>
+</body>
+</html>
