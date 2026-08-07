@@ -4,7 +4,8 @@
     { "source": "/", "destination": "/public/index.html" }
   ],
   "functions": {
-    "api/**/*.js": { "maxDuration": 120 }
+    "api/**/*.js": { "maxDuration": 120 },
+    "api/*.js": { "maxDuration": 120 }
   },
   "headers": [
     {
