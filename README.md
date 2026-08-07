@@ -42,7 +42,7 @@ Vercel 대시보드 → 프로젝트 → `Settings` → `Environment Variables`
 | 변수명 | 값 | 설명 |
 |---|---|---|
 | `DUMMY_MODE` | `true` | 테스트 단계: API 없이 전체 플로우 확인 |
-| `ANTHROPIC_API_KEY` | `sk-ant-...` | 프롬프트 생성 (나중에 입력) |
+| `ANTHROPIC_API_KEY` | Anthropic 콘솔에서 발급 | 프롬프트 생성 (나중에 입력) |
 | `HIGGSFIELD_API_KEY` | `...` | 이미지/영상 생성 (나중에 입력) |
 
 > ⚠️ `DUMMY_MODE=true` 로 먼저 전체 플로우를 테스트하세요.
