@@ -338,7 +338,7 @@
     <div class="form-card">
       <!-- 카테고리 탭 -->
       <div class="cat-tabs">
-        <button class="cat-tab" data-k="anniv" onclick="pickConcept('anniv')"><span class="ct-emoji">🎀</span><span class="ct-label">1~10주년</span></button>
+        <button class="cat-tab" data-k="anniv" onclick="pickConcept('anniv')"><span class="ct-emoji">🎀</span><span class="ct-label">기념일</span></button>
         <button class="cat-tab on" data-k="propose" onclick="pickConcept('propose')"><span class="ct-emoji">💍</span><span class="ct-label">프로포즈</span></button>
         <button class="cat-tab" data-k="birthday" onclick="pickConcept('birthday')"><span class="ct-emoji">🎂</span><span class="ct-label">생일</span></button>
       </div>
@@ -373,6 +373,23 @@
     <div class="eyebrow">당신만의 미리보기</div>
     <h2>당신의 사진이<br>이렇게 영상이 됩니다</h2>
     <p class="pv-sub">올려주신 사진으로 SCENE 1·2를 애니메이션 영상으로 만들었어요.</p>
+
+    <!-- 영상 생성 상태 표시 -->
+    <div id="genStatusWrap" style="display:none;margin:0 auto 24px;max-width:340px;background:#fff;border:1.5px solid #f0d6e4;border-radius:16px;padding:20px 24px;text-align:center;box-shadow:0 4px 20px rgba(240,86,127,.1);">
+      <div id="genStatusIcon" style="font-size:32px;margin-bottom:10px;">⏳</div>
+      <div id="genStatusTitle" style="font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">영상 생성 중...</div>
+      <div id="genStatusDesc" style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6;">AI가 애니메이션 영상을 만들고 있어요.<br>1~3분 정도 소요됩니다.</div>
+      <!-- 진행 바 -->
+      <div style="height:6px;background:#f5e8ef;border-radius:3px;overflow:hidden;margin-bottom:10px;">
+        <div id="genProgressBar" style="height:100%;background:linear-gradient(90deg,#f0567f,#ff8fab);border-radius:3px;width:0%;transition:width 0.5s ease;"></div>
+      </div>
+      <div id="genProgressTxt" style="font-size:12px;color:#bbb;">잠시만 기다려주세요...</div>
+      <!-- 완료 시 미리보기 버튼 (숨김) -->
+      <button id="playPreviewBtn" onclick="playPreviewVideos()" style="display:none;margin-top:14px;width:100%;padding:13px;background:linear-gradient(135deg,#f0567f,#ff8fab);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(240,86,127,.35);">
+        ▶ 미리보기 영상 재생
+      </button>
+    </div>
+
     <div class="scene-videos" id="sceneVideos"></div>
     <div class="sb-title">📖 이어지는 이야기</div>
     <div class="storyboard" id="storyboard"></div>
@@ -615,46 +632,104 @@
     }
   }
 
+  /* ── 상태 표시 헬퍼 ── */
+  let _readyVideos = [];   // 완성된 영상 URL 보관
+  let _progressTimer = null;
+
+  function setGenStatus(icon, title, desc, pct, showBtn){
+    const w=document.getElementById('genStatusWrap');
+    if(w) w.style.display='block';
+    const el=id=>document.getElementById(id);
+    if(el('genStatusIcon'))   el('genStatusIcon').textContent   = icon;
+    if(el('genStatusTitle'))  el('genStatusTitle').textContent  = title;
+    if(el('genStatusDesc'))   el('genStatusDesc').innerHTML     = desc;
+    if(el('genProgressBar'))  el('genProgressBar').style.width  = pct+'%';
+    if(el('genProgressTxt'))  el('genProgressTxt').textContent  =
+      pct < 100 ? '진행률 '+pct+'%' : '완성!';
+    if(el('playPreviewBtn'))  el('playPreviewBtn').style.display = showBtn ? 'block' : 'none';
+  }
+
+  /* 가짜 진행 바 (시각적 피드백용, 실제 완료는 폴링으로 확인) */
+  function startFakeProgress(){
+    let pct = 0;
+    _progressTimer = setInterval(function(){
+      if(pct >= 90){ clearInterval(_progressTimer); return; }
+      pct += Math.random() * 3;
+      pct = Math.min(pct, 90);
+      const bar = document.getElementById('genProgressBar');
+      const txt = document.getElementById('genProgressTxt');
+      if(bar) bar.style.width = Math.round(pct)+'%';
+      if(txt) txt.textContent = '진행률 '+Math.round(pct)+'%';
+    }, 2000);
+  }
+
   /* 로딩 상태의 미리보기 화면 표시 */
   function showLoadingPreview(){
+    _readyVideos = [];
     document.getElementById('preview').classList.add('show');
     document.getElementById('pvCta').style.opacity='0';
+    document.getElementById('pvCta').style.pointerEvents='none';
+    document.getElementById('sceneVideos').innerHTML='';
     try{ document.getElementById('preview').scrollIntoView({behavior:'smooth'}); }catch(e){}
 
-    const sv=document.getElementById('sceneVideos');
-    sv.innerHTML='';
-    for(let i=0;i<2;i++){
-      const el=document.createElement('div');
-      el.className='svideo';
-      el.style.animationDelay=(i*0.12)+'s';
-      el.innerHTML=`<div class="sv-no">SCENE ${i+1}</div>
-        <div class="loading"><div class="spinner"></div><div class="lt">애니메이션 영상 만드는 중...</div></div>`;
-      sv.appendChild(el);
-    }
+    setGenStatus('⏳','영상 생성 중...',
+      'AI가 애니메이션 영상을 만들고 있어요.<br>1~3분 정도 소요됩니다.',
+      0, false);
+    startFakeProgress();
     renderStoryboard();
   }
 
-  /* 서버 폴링 → 완성되면 실제 영상 표시 */
+  /* 서버 폴링 → 완성되면 상태 업데이트 */
   async function pollPreview(jobId){
-    const MAX_TRY=90;          // 최대 약 3분 (2초 간격)
+    if(_progressTimer) clearInterval(_progressTimer);
+    const MAX_TRY = 90; // 최대 3분 (2초 간격)
     for(let i=0;i<MAX_TRY;i++){
       await new Promise(r=>setTimeout(r,2000));
       try{
-        const res=await fetch(API_BASE+'/preview/'+jobId);
-        const data=await res.json();
+        const res  = await fetch(API_BASE+'/preview/'+jobId);
+        const data = await res.json();
 
         if(data.status==='completed'){
-          showVideos(data.result.videos);
+          _readyVideos = data.result.videos || [];
+          if(_progressTimer) clearInterval(_progressTimer);
+          // 진행 바 100% 후 자동 재생
+          setGenStatus('✅','영상 완성!',
+            '잠시 후 영상이 자동으로 재생됩니다.', 100, false);
+          setTimeout(function(){
+            const w=document.getElementById('genStatusWrap');
+            if(w) w.style.display='none';
+            showVideos(_readyVideos);
+          }, 1000);
           return;
         }
         if(data.status==='failed'){
-          showError('영상 생성에 실패했어요. 다시 시도해주세요.');
+          if(_progressTimer) clearInterval(_progressTimer);
+          showGenError('영상 생성에 실패했어요. 다시 시도해주세요.');
           return;
         }
-        // processing → 계속 대기
-      }catch(e){ /* 네트워크 일시 오류는 무시하고 재시도 */ }
+        // processing 중 → 진행중 메시지 교체
+        if(i===15) setGenStatus('🎨','캐릭터 변환 중...',
+          'AI가 사진을 애니메이션 스타일로 변환하고 있어요.',
+          30, false);
+        if(i===30) setGenStatus('🎬','영상 렌더링 중...',
+          'SCENE 1 영상을 만들고 있어요.',
+          55, false);
+        if(i===50) setGenStatus('🎬','영상 렌더링 중...',
+          'SCENE 2 영상을 만들고 있어요. 거의 다 됐어요!',
+          75, false);
+      }catch(e){ /* 네트워크 일시 오류 무시 */ }
     }
-    showError('생성이 지연되고 있어요. 완성되면 카카오톡으로 알려드릴게요!');
+    if(_progressTimer) clearInterval(_progressTimer);
+    showGenError('생성이 지연되고 있어요. 완성되면 카카오톡으로 알려드릴게요!');
+  }
+
+  /* 미리보기 버튼 클릭 → 영상 표시 */
+  function playPreviewVideos(){
+    if(!_readyVideos.length){ return; }
+    // 상태 카드 숨기기
+    const w=document.getElementById('genStatusWrap');
+    if(w) w.style.display='none';
+    showVideos(_readyVideos);
   }
 
   /* 완성된 영상 2개 표시 */
@@ -664,32 +739,40 @@
     const sv=document.getElementById('sceneVideos');
     sv.innerHTML='';
 
-    videoUrls.forEach((url,i)=>{
+    videoUrls.forEach(function(url,i){
       const q=qs[i];
       const rightSep=(q.fixedR && /^[,.]/.test(q.fixedR))?'':' ';
-      const cap=`${q.fixedL?q.fixedL+' ':''}${v[q.key]||q.ph}${q.fixedR?rightSep+q.fixedR:''}`.trim();
+      const cap=(q.fixedL?q.fixedL+' ':'')+(v[q.key]||q.ph)+(q.fixedR?rightSep+q.fixedR:'');
       const el=document.createElement('div');
       el.className='svideo';
       el.style.animationDelay=(i*0.12)+'s';
-      el.innerHTML=`<div class="sv-no">SCENE ${i+1}</div>
-        <video src="${url}" autoplay muted loop playsinline
-               style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
-        <div class="sv-cap">${esc(cap)}</div>`;
+      el.innerHTML=
+        '<div class="sv-no">SCENE '+(i+1)+'</div>'+
+        '<video src="'+url+'" autoplay muted loop playsinline'+
+        ' style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>'+
+        '<div class="sv-cap">'+esc(cap.trim())+'</div>';
       sv.appendChild(el);
     });
 
     const cta=document.getElementById('pvCta');
     cta.style.opacity='';
+    cta.style.pointerEvents='';
     cta.style.animation='none'; void cta.offsetWidth;
     cta.style.animation='rise .55s forwards';
   }
 
-  function showError(msg){
-    const sv=document.getElementById('sceneVideos');
-    sv.innerHTML=`<div class="svideo" style="opacity:1;transform:none">
-      <div class="loading"><div style="font-size:28px">⏳</div><div class="lt">${esc(msg)}</div></div>
-    </div>`;
+  function showGenError(msg){
+    const w=document.getElementById('genStatusWrap');
+    if(w){ w.style.borderColor='#fca5a5'; w.style.background='#fff1f1'; }
+    setGenStatus('⚠️','생성 실패', esc(msg), 0, false);
+    const t=document.getElementById('genStatusTitle');
+    if(t) t.style.color='#ef4444';
+    // 재시도 버튼
+    const d=document.getElementById('genStatusDesc');
+    if(d) d.innerHTML=esc(msg)+'<br><button onclick="generate()" style="margin-top:12px;padding:9px 20px;background:#f0567f;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">다시 시도</button>';
   }
+
+  function showError(msg){ showGenError(msg); }
 
   /* SCENE 3~10 스토리보드 (3개 공개=3,4,5 / 나머지 잠금) */
   const SB_EMOJI=['🌸','🤝','💋','✈️','🌧️','🎬','📸','💗','💍','🏡'];
