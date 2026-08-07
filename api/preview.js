@@ -1,6 +1,7 @@
 // ══════════════════════════════════════════════
 // /api/preview.js
-// POST: 씬 1~2 영상 생성 → Higgsfield 공식 SDK 형식
+// POST: 씬 1~2 영상 생성 → Higgsfield 공식 API
+// 공식 SDK 엔드포인트: platform.higgsfield.ai/subscribe
 // ══════════════════════════════════════════════
 
 export default async function handler(req, res) {
@@ -23,127 +24,154 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, jobId: 'dummy-' + Date.now() });
   }
 
-  const credentials = `${HF_KEY}:${HF_SECRET}`;
+  const credentials = HF_KEY + ':' + HF_SECRET;
 
   try {
     // ── 1. 프롬프트 생성
     const prompts = await generatePrompts(ANTHROPIC, concept, scenes);
 
-    // ── 2. base64 사진 → Higgsfield CDN 업로드 (URL로 변환)
+    // ── 2. 사진 업로드 (있을 경우)
     let photoUrl = null;
     if (photo && photo.startsWith('data:')) {
-      photoUrl = await uploadPhotoToHiggsfield(photo, credentials);
-      console.log('사진 업로드 결과:', photoUrl ? '성공' : '실패');
+      photoUrl = await uploadFile(photo, credentials);
+      console.log('사진 업로드:', photoUrl ? '성공 ' + photoUrl.slice(0, 60) : '실패 → text-to-video로 대체');
     }
 
-    // ── 3. 씬별 영상 생성 요청
+    // ── 3. 씬별 영상 생성
     const jobIds = [];
 
     for (let i = 0; i < 2; i++) {
-      let endpoint, body;
+      let modelSlug, args;
 
       if (photoUrl) {
-        // 사진 있을 때: image-to-video (DoP 모델)
-        endpoint = '/v1/image2video/dop';
-        body = {
-          params: {
-            model: 'dop-turbo',
-            prompt: prompts[i],
-            input_images: [{ type: 'image_url', image_url: photoUrl }]
-          }
+        // image-to-video: DoP 모델
+        modelSlug = 'higgsfield/dop/v1/image-to-video';
+        args = {
+          prompt: prompts[i],
+          model: 'dop-turbo',
+          input_images: [{ type: 'image_url', image_url: photoUrl }]
         };
       } else {
-        // 사진 없을 때 or 업로드 실패: text-to-video (Kling 모델)
-        endpoint = '/v1/text2video/kling';
-        body = {
-          params: {
-            prompt: prompts[i],
-            aspect_ratio: '9:16',
-            duration: 5
-          }
+        // text-to-video: Kling 모델
+        modelSlug = 'kuaishou/kling/v3/text-to-video';
+        args = {
+          prompt: prompts[i],
+          aspect_ratio: '9:16',
+          duration: '5'
         };
       }
 
-      const resp = await fetch('https://platform.higgsfield.ai' + endpoint, {
+      const resp = await fetch('https://platform.higgsfield.ai/subscribe/' + modelSlug, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Key ${credentials}`,
+          'Authorization': 'Key ' + credentials,
           'User-Agent': 'higgsfield-server-js/2.0'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ arguments: args })
       });
 
       if (!resp.ok) {
-        const errText = await resp.text().catch(() => '');
-        let errMsg = errText;
-        try {
-          const errJson = JSON.parse(errText);
-          errMsg = JSON.stringify(errJson);
-        } catch (_) {}
-        console.error(`씬${i+1} 오류 (${resp.status}):`, errMsg.slice(0, 500));
-        throw new Error(`Higgsfield 씬${i+1} 오류 (${resp.status}): ${errMsg.slice(0, 200)}`);
+        const errTxt = await resp.text().catch(() => '');
+        console.error('씬' + (i+1) + ' 오류 (' + resp.status + '):', errTxt.slice(0, 400));
+        // 실패 시 대체 모델 시도
+        const fallbackResp = await tryFallbackModel(prompts[i], credentials);
+        if (fallbackResp) {
+          jobIds.push(fallbackResp);
+          continue;
+        }
+        throw new Error('씬' + (i+1) + ' 생성 실패 (' + resp.status + '): ' + errTxt.slice(0, 200));
       }
 
       const data = await resp.json();
-      console.log(`씬${i+1} 응답:`, JSON.stringify(data).slice(0, 300));
+      console.log('씬' + (i+1) + ' 응답:', JSON.stringify(data).slice(0, 300));
 
       const jobId = data.request_id || data.id || data.job_id || data.requestId;
-      if (!jobId) {
-        throw new Error(`씬${i+1} 작업 ID 없음. 응답: ${JSON.stringify(data).slice(0, 200)}`);
-      }
+      if (!jobId) throw new Error('씬' + (i+1) + ' 작업 ID 없음: ' + JSON.stringify(data).slice(0, 200));
       jobIds.push(jobId);
     }
 
     return res.status(200).json({ ok: true, jobId: jobIds.join(',') });
 
   } catch (e) {
-    console.error('preview 오류:', e.message);
+    console.error('preview 최종 오류:', e.message);
     return res.status(500).json({ ok: false, message: e.message });
   }
 }
 
-// ── base64 사진 → Higgsfield CDN 업로드
-async function uploadPhotoToHiggsfield(base64DataUrl, credentials) {
+// ── 대체 모델 시도 (Seedance)
+async function tryFallbackModel(prompt, credentials) {
   try {
-    // data:image/jpeg;base64,xxx 형태 파싱
+    const fallbackModels = [
+      'bytedance/seedance/v2/text-to-video',
+      'bytedance/seedance/v1/text-to-video',
+      'kuaishou/kling/v1/text-to-video'
+    ];
+    for (const model of fallbackModels) {
+      const resp = await fetch('https://platform.higgsfield.ai/subscribe/' + model, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Key ' + credentials,
+          'User-Agent': 'higgsfield-server-js/2.0'
+        },
+        body: JSON.stringify({ arguments: { prompt: prompt, aspect_ratio: '9:16', duration: '5' } })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const jobId = data.request_id || data.id || data.job_id;
+        if (jobId) {
+          console.log('대체 모델 성공:', model, jobId);
+          return jobId;
+        }
+      }
+      console.warn('대체 모델 실패:', model, resp.status);
+    }
+    return null;
+  } catch (e) {
+    console.warn('대체 모델 오류:', e.message);
+    return null;
+  }
+}
+
+// ── base64 사진 → Higgsfield CDN 업로드
+async function uploadFile(base64DataUrl, credentials) {
+  try {
     const match = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) return null;
 
     const mimeType = match[1];
-    const base64   = match[2];
-    const buffer   = Buffer.from(base64, 'base64');
+    const buffer   = Buffer.from(match[2], 'base64');
 
-    // 파일 크기 제한: 10MB 초과 시 스킵
-    if (buffer.length > 10 * 1024 * 1024) {
-      console.warn('사진 크기 초과 (10MB), text-to-video로 대체');
+    if (buffer.length > 8 * 1024 * 1024) {
+      console.warn('사진 크기 초과 (8MB)');
       return null;
     }
 
-    // Higgsfield 업로드 엔드포인트
-    const uploadResp = await fetch('https://platform.higgsfield.ai/v1/upload', {
+    // 공식 업로드 엔드포인트
+    const uploadResp = await fetch('https://platform.higgsfield.ai/files/upload', {
       method: 'POST',
       headers: {
-        'Authorization': `Key ${credentials}`,
+        'Authorization': 'Key ' + credentials,
         'User-Agent': 'higgsfield-server-js/2.0',
         'Content-Type': mimeType,
-        'Content-Length': buffer.length.toString()
+        'Content-Length': String(buffer.length)
       },
       body: buffer
     });
 
     if (!uploadResp.ok) {
       const errTxt = await uploadResp.text().catch(() => '');
-      console.warn('Higgsfield 업로드 실패:', uploadResp.status, errTxt.slice(0, 200));
+      console.warn('업로드 실패 (' + uploadResp.status + '):', errTxt.slice(0, 200));
       return null;
     }
 
     const uploadData = await uploadResp.json();
     console.log('업로드 응답:', JSON.stringify(uploadData).slice(0, 200));
-    return uploadData.url || uploadData.image_url || uploadData.cdn_url || null;
+    return uploadData.url || uploadData.cdn_url || uploadData.file_url || uploadData.image_url || null;
 
   } catch (e) {
-    console.warn('사진 업로드 오류:', e.message);
+    console.warn('업로드 오류:', e.message);
     return null;
   }
 }
@@ -186,7 +214,7 @@ async function generatePrompts(apiKey, concept, scenes) {
     if (parsed.prompts && parsed.prompts.length >= 2) return parsed.prompts;
     return defaults;
   } catch (e) {
-    console.warn('Claude 프롬프트 생성 실패, 기본값 사용:', e.message);
+    console.warn('Claude 실패, 기본값 사용:', e.message);
     return defaults;
   }
 }
