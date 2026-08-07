@@ -1,0 +1,81 @@
+// ══════════════════════════════════════════════
+// /api/debug-models.js
+// GET: Higgsfield 사용 가능한 모델/엔드포인트 조회
+// 배포 후 /api/debug-models 접속하면 목록 확인 가능
+// ══════════════════════════════════════════════
+
+export default async function handler(req, res) {
+  const HF_KEY    = process.env.HIGGSFIELD_API_KEY;
+  const HF_SECRET = process.env.HIGGSFIELD_API_SECRET;
+
+  if (!HF_KEY || !HF_SECRET) {
+    return res.status(500).json({ error: 'API 키 없음' });
+  }
+
+  const credentials = HF_KEY + ':' + HF_SECRET;
+  const BASE = 'https://platform.higgsfield.ai';
+
+  const results = {};
+
+  // 1. 루트 확인
+  try {
+    const r = await fetch(BASE + '/', {
+      headers: { 'Authorization': 'Key ' + credentials, 'User-Agent': 'higgsfield-server-js/2.0' }
+    });
+    results.root = { status: r.status, body: (await r.text()).slice(0, 300) };
+  } catch(e) { results.root = { error: e.message }; }
+
+  // 2. 모델 목록 엔드포인트 후보들
+  const modelEndpoints = [
+    '/models',
+    '/v1/models',
+    '/api/models',
+    '/subscriptions',
+    '/v1/subscriptions',
+    '/subscribe',
+    '/requests',
+    '/v1/requests',
+    '/v2/models',
+    '/generation/models',
+  ];
+
+  results.endpoints = {};
+  for (const ep of modelEndpoints) {
+    try {
+      const r = await fetch(BASE + ep, {
+        headers: { 'Authorization': 'Key ' + credentials, 'User-Agent': 'higgsfield-server-js/2.0' }
+      });
+      const body = await r.text();
+      results.endpoints[ep] = { status: r.status, body: body.slice(0, 500) };
+    } catch(e) {
+      results.endpoints[ep] = { error: e.message };
+    }
+  }
+
+  // 3. 실제 생성 엔드포인트 후보 테스트 (OPTIONS/GET만)
+  const genEndpoints = [
+    '/v1/image2video/dop',
+    '/v1/text2video/kling',
+    '/v1/text2video/soul',
+    '/subscribe/kuaishou/kling/v3/text-to-video',
+    '/subscribe/bytedance/seedance/v2/text-to-video',
+    '/api/v1/generate',
+    '/v1/generate',
+    '/generate',
+  ];
+
+  results.genEndpoints = {};
+  for (const ep of genEndpoints) {
+    try {
+      const r = await fetch(BASE + ep, {
+        method: 'OPTIONS',
+        headers: { 'Authorization': 'Key ' + credentials, 'User-Agent': 'higgsfield-server-js/2.0' }
+      });
+      results.genEndpoints[ep] = { options_status: r.status };
+    } catch(e) {
+      results.genEndpoints[ep] = { error: e.message };
+    }
+  }
+
+  return res.status(200).json(results);
+}
