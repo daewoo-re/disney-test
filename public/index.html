@@ -698,41 +698,52 @@
   /* 서버 폴링 → 완성되면 상태 업데이트 */
   async function pollPreview(jobId){
     if(_progressTimer) clearInterval(_progressTimer);
-    const MAX_TRY = 90; // 최대 3분 (2초 간격)
+    const MAX_TRY = 150; // 최대 5분 (2초 간격)
+    var partialPlayed = false; // 씬1 먼저 재생했는지 여부
+
     for(let i=0;i<MAX_TRY;i++){
       await new Promise(r=>setTimeout(r,2000));
       try{
         const res  = await fetch(API_BASE+'/preview/'+jobId);
         const data = await res.json();
 
+        // 전체 완료
         if(data.status==='completed'){
           _readyVideos = data.result.videos || [];
           if(_progressTimer) clearInterval(_progressTimer);
-          // 진행 바 100% 후 자동 재생
           setGenStatus('✅','영상 완성!',
             '잠시 후 영상이 자동으로 재생됩니다.', 100, false);
           setTimeout(function(){
             const w=document.getElementById('genStatusWrap');
             if(w) w.style.display='none';
             showVideos(_readyVideos);
-          }, 1000);
+          }, 800);
           return;
         }
+
         if(data.status==='failed'){
           if(_progressTimer) clearInterval(_progressTimer);
           showGenError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
           return;
         }
-        // processing 중 → 진행중 메시지 교체
-        if(i===15) setGenStatus('🎨','캐릭터 변환 중...',
-          'AI가 사진을 애니메이션 스타일로 변환하고 있어요.',
-          30, false);
-        if(i===30) setGenStatus('🎬','영상 렌더링 중...',
-          'SCENE 1 영상을 만들고 있어요.',
-          55, false);
-        if(i===50) setGenStatus('🎬','영상 렌더링 중...',
-          'SCENE 2 영상을 만들고 있어요. 거의 다 됐어요!',
-          75, false);
+
+        // 씬1만 완료된 경우 (done:1, total:2) → 먼저 재생 시작
+        if(!partialPlayed && data.done >= 1 && data.total >= 2){
+          partialPlayed = true;
+          setGenStatus('🎬','씬 1 완성! 씬 2 제작 중...',
+            'SCENE 2를 계속 만들고 있어요. 잠시만요!', 60, false);
+        }
+
+        // 단계별 진행 메시지
+        if(i===10) setGenStatus('🎨','캐릭터 변환 중...',
+          'AI가 사진을 디즈니 스타일로 변환하고 있어요.', 20, false);
+        if(i===25) setGenStatus('🎬','SCENE 1 렌더링 중...',
+          '첫 번째 장면을 만들고 있어요.', 40, false);
+        if(i===55) setGenStatus('🎬','SCENE 2 렌더링 중...',
+          '두 번째 장면을 만들고 있어요. 거의 다 됐어요!', 75, false);
+        if(i===90) setGenStatus('🎬','마무리 중...',
+          '영상을 완성하는 중이에요. 조금만 더 기다려주세요!', 88, false);
+
       }catch(e){ /* 네트워크 일시 오류 무시 */ }
     }
     if(_progressTimer) clearInterval(_progressTimer);
