@@ -739,7 +739,7 @@
     showVideos(_readyVideos);
   }
 
-  /* ── 자막 큐 생성 (참고 HTML의 buildCues 방식 적용) ── */
+  /* ── 자막 큐 생성 ── */
   function buildCues(q, v, dur){
     var user=(v[q.key]||q.ph||'').trim();
     var parts=[];
@@ -761,86 +761,128 @@
     });
   }
 
-  /* 완성된 영상 2개 표시 — 동적 자막 타이밍 엔진 적용 */
+  /* ── 씬 1→2 연속 재생 (하나의 플레이어에서 이어서 재생) ── */
   function showVideos(videoUrls){
     var v=vals();
     var qs=CONCEPTS[CONCEPT].questions;
     var sv=document.getElementById('sceneVideos');
     sv.innerHTML='';
 
-    videoUrls.forEach(function(urlOrObj, i){
-      var url = (typeof urlOrObj==='string') ? urlOrObj : urlOrObj.url;
-      var hintDur = (urlOrObj && urlOrObj.duration) || 6;
-      var q=qs[i];
-      if(!q) return;
+    // 유효한 URL만 필터
+    var urls = videoUrls.filter(function(u){ return typeof u === 'string' ? u : (u && u.url); });
+    if(!urls.length) return;
 
-      var el=document.createElement('div');
-      el.className='svideo';
-      el.style.animationDelay=(i*0.12)+'s';
-      el.innerHTML=
-        '<div class="sv-no">SCENE '+(i+1)+'</div>'+
-        '<div class="sv-prog"></div>'+
-        '<video autoplay muted loop playsinline preload="auto"'+
-        ' style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>'+
-        '<button class="sv-mute" type="button" aria-label="소리 켜기">🔇</button>'+
-        '<div class="sv-sub"></div>';
-      sv.appendChild(el);
+    // 씬별 데이터 준비
+    var scenes_data = urls.map(function(urlOrObj, i){
+      return {
+        url: typeof urlOrObj === 'string' ? urlOrObj : urlOrObj.url,
+        duration: (urlOrObj && urlOrObj.duration) || 6,
+        q: qs[i] || qs[0]
+      };
+    });
 
-      var video   = el.querySelector('video');
-      var subBox  = el.querySelector('.sv-sub');
-      var prog    = el.querySelector('.sv-prog');
-      var muteBtn = el.querySelector('.sv-mute');
-      video.src = url;
+    // 단일 플레이어 컨테이너
+    var el = document.createElement('div');
+    el.className = 'svideo';
+    el.style.animationDelay = '0s';
+    el.innerHTML =
+      '<div class="sv-prog"></div>' +
+      '<video autoplay muted playsinline preload="auto"' +
+      ' style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>' +
+      '<div class="sv-no" id="sceneLabel">SCENE 1</div>' +
+      '<button class="sv-mute" type="button" aria-label="소리 켜기">🔇</button>' +
+      '<div class="sv-sub"></div>';
+    sv.appendChild(el);
+
+    var video   = el.querySelector('video');
+    var subBox  = el.querySelector('.sv-sub');
+    var prog    = el.querySelector('.sv-prog');
+    var muteBtn = el.querySelector('.sv-mute');
+    var sceneLabel = el.querySelector('#sceneLabel');
+
+    var currentScene = 0;
+    var cueEls = [];
+
+    function loadScene(idx){
+      if(idx >= scenes_data.length) {
+        // 전체 종료 → 처음으로 루프
+        currentScene = 0;
+        loadScene(0);
+        return;
+      }
+      currentScene = idx;
+      var sc = scenes_data[idx];
+      sceneLabel.textContent = 'SCENE ' + (idx+1);
 
       // 자막 마운트
-      var cueEls=[];
-      function mountCues(dur){
-        subBox.innerHTML='';
-        cueEls=[];
-        var list=buildCues(q, v, dur);
-        list.forEach(function(c){
-          var span=document.createElement('span');
-          span.className='cue';
-          span.innerHTML=c.em
+      subBox.innerHTML = '';
+      cueEls = [];
+      var list = buildCues(sc.q, v, sc.duration);
+      list.forEach(function(c){
+        var span = document.createElement('span');
+        span.className = 'cue';
+        span.innerHTML = c.em
+          ? '<span class="em">'+esc(c.text)+'</span>'
+          : esc(c.text);
+        subBox.appendChild(span);
+        cueEls.push({el:span, start:c.start, end:c.end});
+      });
+
+      // 영상 로드 & 재생
+      video.src = sc.url;
+      video.load();
+      video.play().catch(function(){});
+
+      // 실제 영상 길이로 자막 재배분
+      video.addEventListener('loadedmetadata', function onMeta(){
+        var d = video.duration && isFinite(video.duration) ? video.duration : sc.duration;
+        subBox.innerHTML = '';
+        cueEls = [];
+        var list2 = buildCues(sc.q, v, d);
+        list2.forEach(function(c){
+          var span = document.createElement('span');
+          span.className = 'cue';
+          span.innerHTML = c.em
             ? '<span class="em">'+esc(c.text)+'</span>'
             : esc(c.text);
           subBox.appendChild(span);
           cueEls.push({el:span, start:c.start, end:c.end});
         });
-        return list;
-      }
-      mountCues(hintDur);
-
-      // 실제 영상 길이로 재배분
-      video.addEventListener('loadedmetadata', function(){
-        var d = video.duration && isFinite(video.duration) ? video.duration : hintDur;
-        mountCues(d);
+        video.removeEventListener('loadedmetadata', onMeta);
       });
+    }
 
-      // 재생 시간 → 자막 + 진행 바 동기화
-      video.addEventListener('timeupdate', function(){
-        var d=video.duration||hintDur, tt=video.currentTime;
-        prog.style.width=Math.min(100,(tt/d)*100)+'%';
-        cueEls.forEach(function(c){
-          var on=tt>=c.start && tt<c.end;
-          c.el.classList.toggle('on', on);
-        });
-      });
-
-      // 음소거 토글 (자동재생 정책상 muted 시작)
-      muteBtn.addEventListener('click', function(){
-        video.muted=!video.muted;
-        muteBtn.textContent=video.muted ? '🔇' : '🔊';
-        muteBtn.setAttribute('aria-label', video.muted ? '소리 켜기' : '소리 끄기');
+    // 재생 시간 동기화
+    video.addEventListener('timeupdate', function(){
+      var d = video.duration || 6;
+      var tt = video.currentTime;
+      prog.style.width = Math.min(100,(tt/d)*100) + '%';
+      cueEls.forEach(function(c){
+        c.el.classList.toggle('on', tt >= c.start && tt < c.end);
       });
     });
 
-    var cta=document.getElementById('pvCta');
+    // 씬 종료 → 다음 씬으로 자동 전환
+    video.addEventListener('ended', function(){
+      loadScene(currentScene + 1);
+    });
+
+    // 음소거 토글
+    muteBtn.addEventListener('click', function(){
+      video.muted = !video.muted;
+      muteBtn.textContent = video.muted ? '🔇' : '🔊';
+      muteBtn.setAttribute('aria-label', video.muted ? '소리 켜기' : '소리 끄기');
+    });
+
+    // 첫 번째 씬 로드
+    loadScene(0);
+
+    var cta = document.getElementById('pvCta');
     if(cta){
-      cta.style.opacity='';
-      cta.style.pointerEvents='';
-      cta.style.animation='none'; void cta.offsetWidth;
-      cta.style.animation='rise .55s forwards';
+      cta.style.opacity = '';
+      cta.style.pointerEvents = '';
+      cta.style.animation = 'none'; void cta.offsetWidth;
+      cta.style.animation = 'rise .55s forwards';
     }
   }
 
