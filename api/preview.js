@@ -92,7 +92,14 @@ export default async function handler(req, res) {
 // ── Soul Cinema: 실사 → 디즈니/애니 스타일 변환 (무료 0크레딧)
 async function convertToDisneyStyle(photoUrl, auth, BASE) {
   try {
-    const stylePrompt = 'Disney Pixar 3D animated style, high quality CG animation, soft rounded facial features, large expressive eyes, warm cinematic lighting, vibrant colors, professional animated film character design, Korean young adult, charming and romantic atmosphere';
+    // ── 캐릭터 보드 기반 디즈니 스타일 변환 프롬프트
+  const stylePrompt =
+    'Disney Pixar 3D animated movie style, Korean young adult couple, ' +
+    'large expressive eyes, smooth porcelain skin, soft rounded facial features, ' +
+    'male: wavy dark brown hair, blue denim shirt, khaki pants, white sneakers, ' +
+    'female: shoulder-length wavy dark brown hair, pink floral sundress, white sneakers, ' +
+    'Disney princess and prince aesthetic, masterpiece, ultra detailed, ' +
+    'high quality 3D CG animation, professional animated film, character consistency';
 
     // 방법 A: Soul Cinema (text2image + reference)
     const bodyA = {
@@ -237,42 +244,84 @@ async function uploadToImgbb(base64DataUrl, imgbbKey) {
 
 // ── Claude 프롬프트 생성
 async function generatePrompts(apiKey, concept, scenes) {
-  const STYLE = 'high-quality 3D animated film, Disney Pixar style, Korean young adult couple, large expressive eyes, smooth facial features, natural hair, warm cinematic lighting, romantic bokeh background, emotionally rich scene';
+
+  // ── 캐릭터 보드 이미지 분석 기반 정밀 CHARACTER_BLOCK
+  // 남자: wavy dark brown hair, blue denim shirt, khaki beige pants, white sneakers
+  // 여자: shoulder-length wavy dark brown hair, pink floral sundress, white sneakers
+  // 스타일: Disney Pixar 3D animated movie (공주/왕자 느낌)
+
+  const s1 = (scenes && scenes.s1) || '';
+  const s2 = (scenes && scenes.s2) || '';
+  const customerName = (scenes && scenes.customerName) || '';
+  const maleName   = customerName || 'the man';
+  const femaleName = 'the woman';
+
+  // 캐릭터 보드 기반 정밀 블록
+  const CHARACTER_BLOCK =
+    'Disney Pixar 3D animated movie style, character consistency, same characters throughout, ' +
+    'Korean young adult couple, ' +
+    'male character: tall handsome Korean man with medium wavy dark brown hair swept to side, ' +
+    'warm brown eyes, gentle smile, blue denim long-sleeve shirt with chest pocket, khaki beige pants, white sneakers, ' +
+    'female character: beautiful Korean woman with shoulder-length wavy dark brown hair, ' +
+    'large bright expressive eyes, warm gentle smile, pink floral spaghetti-strap sundress, white sneakers, ' +
+    'same faces same outfits same proportions in every frame, ' +
+    'Disney princess and prince aesthetic, large expressive eyes, smooth porcelain skin, ' +
+    'masterpiece, ultra detailed, high quality 3D CG animation, professional animated film';
 
   const defaults = [
-    STYLE + '. Animated couple at a cozy cafe, golden sunlight streaming through windows, steam rising from coffee cups, nervous excitement as eyes meet for the first time. Slow cinematic zoom in, soft bokeh lights.',
-    STYLE + '. Animated couple sitting across each other at cafe table during golden sunset, warm string lights glowing, both smiling shyly. Cinematic medium shot, vibrant sunset colors through window, magical romantic atmosphere.'
+    CHARACTER_BLOCK + ', ' +
+    'romantic scene at ' + (s1 || 'a cozy warm cafe') + ', ' +
+    'the couple in a magical first encounter, eyes meeting across the room, ' +
+    'warm golden afternoon sunlight streaming through large windows, ' +
+    'nervous excitement and butterflies, soft bokeh background, ' +
+    'cinematic zoom-in shot, Disney fairytale romantic opening scene',
+
+    CHARACTER_BLOCK + ', ' +
+    (s2 ? s2 + ', ' : '') +
+    'the couple sharing a heartwarming romantic moment together, ' +
+    'gentle smiles, eyes full of affection, ' +
+    'warm glowing ambient lights, magical sparkles, ' +
+    'Disney princess and prince fairytale atmosphere, ' +
+    'cinematic medium shot, emotional romantic storytelling'
   ];
 
   if (!apiKey) return defaults;
+
   try {
-    const s1 = (scenes && scenes.s1) || '';
-    const s2 = (scenes && scenes.s2) || '';
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 800,
-        system: 'Higgsfield DoP 모델용 영상 프롬프트 전문가. 반드시 순수 JSON만 응답.',
+        max_tokens: 1200,
+        system: '당신은 Higgsfield DoP 이미지-투-비디오 모델 전용 프롬프트 전문가입니다.\n반드시 CHARACTER_BLOCK을 각 씬 앞에 그대로 포함하세요.\n캐릭터 외모 절대 변경 금지: 남자=wavy dark brown hair, blue denim shirt, khaki pants / 여자=wavy dark brown hair, pink floral dress.\n필수: character consistency, same characters throughout, Disney princess and prince, masterpiece, ultra detailed.\n순수 JSON만 응답.',
         messages: [{
           role: 'user',
-          content: '씬1: "' + s1 + '"\n씬2: "' + s2 + '"\n컨셉: ' + (concept||'propose') + '\n\n스타일: ' + STYLE + '\n\n각 씬을 위 스타일로 100단어 이내 영어 프롬프트 생성:\n{"prompts":["씬1 프롬프트","씬2 프롬프트"]}'
+          content: '남자: ' + maleName + '\n여자: ' + femaleName + '\n씬1: "' + (s1 || '카페에서 처음 만나는 순간') + '"\n씬2: "' + (s2 || '설레는 첫 만남') + '"\n컨셉: ' + (concept || 'propose') + '\n\nCHARACTER_BLOCK:\n"' + CHARACTER_BLOCK + '"\n\n위 CHARACTER_BLOCK을 각 씬 앞에 반드시 포함하고 씬 상황 영어 묘사 추가. 각 프롬프트 120단어 이내.\n{"prompts":["씬1 전체","씬2 전체"]}'
         }]
       })
     });
-    if (!r.ok) return defaults;
-    const d = await r.json();
-    let raw = d.content.map(function(b){ return b.text||''; }).join('');
+
+    if (!resp.ok) { console.warn('Claude 오류:', resp.status); return defaults; }
+
+    const data = await resp.json();
+    let raw = data.content.map(function(b){ return b.text||''; }).join('');
     raw = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    const p = JSON.parse(raw);
-    if (p.prompts && p.prompts.length >= 2) {
-      console.log('프롬프트 생성 완료:', p.prompts[0].slice(0,60) + '...');
-      return p.prompts;
+    const parsed = JSON.parse(raw);
+
+    if (parsed.prompts && parsed.prompts.length >= 2) {
+      console.log('씬1:', parsed.prompts[0].slice(0,100));
+      console.log('씬2:', parsed.prompts[1].slice(0,100));
+      return parsed.prompts;
     }
     return defaults;
+
   } catch(e) {
-    console.warn('Claude 실패:', e.message);
+    console.warn('프롬프트 생성 실패:', e.message);
     return defaults;
   }
 }
