@@ -92,20 +92,23 @@ export default async function handler(req, res) {
 // ── Soul Cinema: 실사 → 디즈니/애니 스타일 변환 (무료 0크레딧)
 async function convertToDisneyStyle(photoUrl, auth, BASE) {
   try {
-    // ── 캐릭터 보드 기반 디즈니 스타일 변환 프롬프트
-  const stylePrompt =
-    'Disney Pixar 3D animated movie style, Korean young adult couple, ' +
-    'large expressive eyes, smooth porcelain skin, soft rounded facial features, ' +
-    'male: wavy dark brown hair, blue denim shirt, khaki pants, white sneakers, ' +
-    'female: shoulder-length wavy dark brown hair, pink floral sundress, white sneakers, ' +
-    'Disney princess and prince aesthetic, masterpiece, ultra detailed, ' +
-    'high quality 3D CG animation, professional animated film, character consistency';
+    // 캐릭터 보드 고정 URL (public 배포)
+    const CHAR_BOARD_URL = 'https://disney-test-phi.vercel.app/character-board.png';
 
-    // 방법 A: Soul Cinema (text2image + reference)
+    const stylePrompt =
+      'Disney Pixar 3D animated movie style, Korean young adult couple, ' +
+      'large expressive eyes, smooth porcelain skin, soft rounded facial features, ' +
+      'male: wavy dark brown hair, blue denim shirt, khaki pants, white sneakers, ' +
+      'female: shoulder-length wavy dark brown hair, pink floral sundress, white sneakers, ' +
+      'Disney princess and prince aesthetic, masterpiece, ultra detailed, ' +
+      'high quality 3D CG animation, professional animated film, character consistency';
+
+    // 방법 A: Soul Cinema — 캐릭터 보드(스타일) + 고객 사진(얼굴)
     const bodyA = {
       prompt: stylePrompt,
-      reference_image_url: photoUrl,
-      reference_strength: 0.85
+      reference_image_url: CHAR_BOARD_URL,
+      input_image_url: photoUrl,
+      reference_strength: 0.9
     };
 
     const rA = await fetch(BASE + '/higgsfield-ai/soul/cinema', {
@@ -143,9 +146,10 @@ async function convertToDisneyStyle(photoUrl, auth, BASE) {
       }
     }
 
-    // 방법 B: Soul Reference
+    // 방법 B: Soul Reference — 캐릭터 보드 reference + 고객 사진
     const bodyB = {
       prompt: stylePrompt,
+      reference_image_url: CHAR_BOARD_URL,
       image_url: photoUrl,
     };
 
