@@ -140,14 +140,46 @@ async function uploadToImgbb(base64DataUrl, imgbbKey) {
 
 // ── Claude 프롬프트 생성
 async function generatePrompts(apiKey, concept, scenes) {
+  // 참고 영상 분석 기반 스타일 가이드
+  // - 3D 애니메이션, 디즈니/픽사 스타일에 가까운 한국형 캐릭터
+  // - 큰 눈, 갸름한 얼굴, 자연스러운 헤어, 부드러운 피부 텍스처
+  // - 따뜻한 영화적 조명 (golden hour, 카페 조명, 가로등 등)
+  // - 카메라: 클로즈업 ~ 풀샷 혼합, 보케 배경
+  // - 감성적이고 로맨틱한 분위기
+
+  const STYLE = 'high-quality 3D animated film style similar to Disney Pixar, Korean young adult couple characters with large expressive eyes, smooth facial features, natural hair, soft skin texture, cinematic bokeh background, warm romantic lighting, emotionally rich scene, 4K quality, professional color grading';
+
+  const SCENE_CONFIGS = {
+    propose: [
+      {
+        scene: 's1',
+        prompt: (location) =>
+          STYLE + '. ' +
+          'A nervous young Korean man sitting alone at a cozy cafe, warm golden sunlight streaming through large windows, steam rising from coffee cup on wooden table, he looks up with wide surprised eyes as someone enters — ' + location + '. ' +
+          'Close-up shot slowly pulling back to medium shot, soft golden bokeh lights in background, heartwarming romantic atmosphere, animated film lighting.',
+      },
+      {
+        scene: 's2',
+        prompt: (firstImpression) =>
+          STYLE + '. ' +
+          'A beautiful moment between two young Korean people — ' + firstImpression + ' — sitting across from each other at a cafe table during golden sunset, warm string lights glowing, both smiling shyly, their hands almost touching on the table. ' +
+          'Cinematic medium shot, vibrant sunset colors through window, magical romantic atmosphere, animated film quality.',
+      }
+    ]
+  };
+
   const defaults = [
-    'Disney Pixar animated style. Two young Korean people meet for the first time, eyes lock in a magical moment. Soft golden light, romantic sparkles, slow zoom in. Cinematic, 8k quality, heartwarming atmosphere.',
-    'Disney Pixar animated style. A young couple on their first date, gently holding hands at a riverside cafe. Warm golden hour light, joyful expressions, smooth cinematic dolly shot. 8k quality, romantic mood.'
+    STYLE + '. A nervous young Korean man sitting alone at a cozy brick-wall cafe, warm golden sunlight streaming through large windows, steam rising from coffee cup, he looks up with wide surprised eyes at someone entering. Close-up shot slowly pulling back, soft bokeh golden lights, heartwarming romantic atmosphere.',
+    STYLE + '. A beautiful young Korean couple sitting across each other at a cafe table during golden sunset, warm string lights glowing overhead, both smiling shyly, their hands almost touching. Cinematic medium shot, vibrant sunset colors through window, magical romantic atmosphere.'
   ];
+
   if (!apiKey) return defaults;
+
   try {
     const s1 = (scenes && scenes.s1) || '';
     const s2 = (scenes && scenes.s2) || '';
+    const conceptKey = concept || 'propose';
+
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -157,12 +189,26 @@ async function generatePrompts(apiKey, concept, scenes) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 600,
-        system: '디즈니/픽사 스타일 영상 프롬프트 전문가. 순수 JSON만 응답.',
+        max_tokens: 800,
+        system: `당신은 Higgsfield DoP 모델 전용 영상 프롬프트 전문가입니다.
+아래 스타일 기준을 반드시 지켜야 합니다:
+- 스타일: high-quality 3D animated film, Disney Pixar 스타일, 한국 젊은 커플 캐릭터
+- 캐릭터: large expressive eyes, smooth facial features, natural hair, soft skin texture
+- 조명: warm cinematic lighting (golden hour / cafe lights / street lights)
+- 카메라: close-up to medium shot, cinematic bokeh background
+- 분위기: romantic, heartwarming, emotionally rich
+
+반드시 순수 JSON만 응답. 마크다운 없이.`,
         messages: [{
           role: 'user',
-          content: '씬1:' + s1 + ' 씬2:' + s2 + ' 컨셉:' + (concept||'propose') +
-            '\n{"prompts":["씬1 80단어 영어 영상 프롬프트(Disney Pixar animated style 시작)","씬2 프롬프트"]}'
+          content: `컨셉: ${conceptKey}
+씬1 입력값: "${s1}"
+씬2 입력값: "${s2}"
+
+위 스타일로 Higgsfield DoP 이미지-투-비디오 모델용 영어 프롬프트를 생성하세요.
+각 프롬프트는 100단어 이내, 씬의 감성과 분위기를 풍부하게 표현해야 합니다.
+
+{"prompts":["씬1 영어 프롬프트","씬2 영어 프롬프트"]}`
         }]
       })
     });
@@ -171,7 +217,14 @@ async function generatePrompts(apiKey, concept, scenes) {
     let raw = d.content.map(function(b){ return b.text||''; }).join('');
     raw = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
     const p = JSON.parse(raw);
-    if (p.prompts && p.prompts.length >= 2) return p.prompts;
+    if (p.prompts && p.prompts.length >= 2) {
+      console.log('생성된 프롬프트 씬1:', p.prompts[0].slice(0,100));
+      console.log('생성된 프롬프트 씬2:', p.prompts[1].slice(0,100));
+      return p.prompts;
+    }
     return defaults;
-  } catch(e) { return defaults; }
+  } catch(e) {
+    console.warn('Claude 프롬프트 생성 실패, 기본값 사용:', e.message);
+    return defaults;
+  }
 }
