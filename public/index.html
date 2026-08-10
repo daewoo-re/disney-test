@@ -199,6 +199,13 @@
   .svideo .sv-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3)}
   .svideo .sv-play::after{content:"";border-left:14px solid var(--rose);border-top:9px solid transparent;border-bottom:9px solid transparent;margin-left:3px}
   .svideo .sv-cap{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:22px 14px 12px;background:linear-gradient(transparent,rgba(0,0,0,.8));color:#fff;font-size:13px;font-weight:600;line-height:1.45}
+  .sv-prog{position:absolute;left:0;top:0;height:3px;z-index:4;width:0;background:linear-gradient(90deg,#f0567f,#ff85a8);transition:width .2s linear}
+  .sv-mute{position:absolute;top:10px;right:10px;z-index:5;width:30px;height:30px;border:0;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+  .sv-mute:hover{background:rgba(0,0,0,.72)}
+  .sv-sub{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:30px 16px 16px;background:linear-gradient(transparent,rgba(0,0,0,.82));pointer-events:none}
+  .sv-sub .cue{display:block;color:#fff;font-size:14px;font-weight:600;line-height:1.5;text-align:center;letter-spacing:-.2px;text-shadow:0 1px 3px rgba(0,0,0,.6);opacity:0;transform:translateY(6px);transition:opacity .32s ease,transform .32s ease}
+  .sv-sub .cue.on{opacity:1;transform:translateY(0)}
+  .sv-sub .cue .em{color:var(--rose);font-weight:800}
   .svideo .loading{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,#2a1730,#3a2148);color:#fff}
   .svideo .loading .lt{font-size:12px;color:#cbb9c6;font-weight:500}
 
@@ -595,7 +602,7 @@
       CURRENT_JOB = data.jobId;
       pollPreview(data.jobId);
     }catch(e){
-      showError('영상 생성에 실패했어요. 잠시 후 다시 시도해주세요.');
+      showError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
     }
   }
   let CURRENT_JOB = null;
@@ -704,7 +711,7 @@
         }
         if(data.status==='failed'){
           if(_progressTimer) clearInterval(_progressTimer);
-          showGenError('영상 생성에 실패했어요. 다시 시도해주세요.');
+          showGenError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
           return;
         }
         // processing 중 → 진행중 메시지 교체
@@ -720,7 +727,7 @@
       }catch(e){ /* 네트워크 일시 오류 무시 */ }
     }
     if(_progressTimer) clearInterval(_progressTimer);
-    showGenError('생성이 지연되고 있어요. 완성되면 카카오톡으로 알려드릴게요!');
+    showGenError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
   }
 
   /* 미리보기 버튼 클릭 → 영상 표시 */
@@ -732,33 +739,109 @@
     showVideos(_readyVideos);
   }
 
-  /* 완성된 영상 2개 표시 */
+  /* ── 자막 큐 생성 (참고 HTML의 buildCues 방식 적용) ── */
+  function buildCues(q, v, dur){
+    var user=(v[q.key]||q.ph||'').trim();
+    var parts=[];
+    if(q.fixedL) parts.push({t:q.fixedL.trim(), em:false});
+    if(user)     parts.push({t:user, em:true});
+    if(q.fixedR){
+      var r=q.fixedR.trim().replace(/^[,.]\s*/,'');
+      if(r) parts.push({t:r, em:false});
+    }
+    if(!parts.length) parts.push({t:user||'우리의 순간', em:false});
+    var pad=dur*0.08, span=dur-pad*1.4;
+    var tot=parts.reduce(function(s,p){ return s+Math.max(p.t.length,2); },0);
+    var acc=0;
+    return parts.map(function(p){
+      var w=Math.max(p.t.length,2)/tot;
+      var start=pad+span*acc; acc+=w;
+      var end=pad+span*acc;
+      return {text:p.t, em:p.em, start:start, end:end};
+    });
+  }
+
+  /* 완성된 영상 2개 표시 — 동적 자막 타이밍 엔진 적용 */
   function showVideos(videoUrls){
-    const v=vals();
-    const qs=CONCEPTS[CONCEPT].questions;
-    const sv=document.getElementById('sceneVideos');
+    var v=vals();
+    var qs=CONCEPTS[CONCEPT].questions;
+    var sv=document.getElementById('sceneVideos');
     sv.innerHTML='';
 
-    videoUrls.forEach(function(url,i){
-      const q=qs[i];
-      const rightSep=(q.fixedR && /^[,.]/.test(q.fixedR))?'':' ';
-      const cap=(q.fixedL?q.fixedL+' ':'')+(v[q.key]||q.ph)+(q.fixedR?rightSep+q.fixedR:'');
-      const el=document.createElement('div');
+    videoUrls.forEach(function(urlOrObj, i){
+      var url = (typeof urlOrObj==='string') ? urlOrObj : urlOrObj.url;
+      var hintDur = (urlOrObj && urlOrObj.duration) || 6;
+      var q=qs[i];
+      if(!q) return;
+
+      var el=document.createElement('div');
       el.className='svideo';
       el.style.animationDelay=(i*0.12)+'s';
       el.innerHTML=
         '<div class="sv-no">SCENE '+(i+1)+'</div>'+
-        '<video src="'+url+'" autoplay muted loop playsinline'+
+        '<div class="sv-prog"></div>'+
+        '<video autoplay muted loop playsinline preload="auto"'+
         ' style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>'+
-        '<div class="sv-cap">'+esc(cap.trim())+'</div>';
+        '<button class="sv-mute" type="button" aria-label="소리 켜기">🔇</button>'+
+        '<div class="sv-sub"></div>';
       sv.appendChild(el);
+
+      var video   = el.querySelector('video');
+      var subBox  = el.querySelector('.sv-sub');
+      var prog    = el.querySelector('.sv-prog');
+      var muteBtn = el.querySelector('.sv-mute');
+      video.src = url;
+
+      // 자막 마운트
+      var cueEls=[];
+      function mountCues(dur){
+        subBox.innerHTML='';
+        cueEls=[];
+        var list=buildCues(q, v, dur);
+        list.forEach(function(c){
+          var span=document.createElement('span');
+          span.className='cue';
+          span.innerHTML=c.em
+            ? '<span class="em">'+esc(c.text)+'</span>'
+            : esc(c.text);
+          subBox.appendChild(span);
+          cueEls.push({el:span, start:c.start, end:c.end});
+        });
+        return list;
+      }
+      mountCues(hintDur);
+
+      // 실제 영상 길이로 재배분
+      video.addEventListener('loadedmetadata', function(){
+        var d = video.duration && isFinite(video.duration) ? video.duration : hintDur;
+        mountCues(d);
+      });
+
+      // 재생 시간 → 자막 + 진행 바 동기화
+      video.addEventListener('timeupdate', function(){
+        var d=video.duration||hintDur, tt=video.currentTime;
+        prog.style.width=Math.min(100,(tt/d)*100)+'%';
+        cueEls.forEach(function(c){
+          var on=tt>=c.start && tt<c.end;
+          c.el.classList.toggle('on', on);
+        });
+      });
+
+      // 음소거 토글 (자동재생 정책상 muted 시작)
+      muteBtn.addEventListener('click', function(){
+        video.muted=!video.muted;
+        muteBtn.textContent=video.muted ? '🔇' : '🔊';
+        muteBtn.setAttribute('aria-label', video.muted ? '소리 켜기' : '소리 끄기');
+      });
     });
 
-    const cta=document.getElementById('pvCta');
-    cta.style.opacity='';
-    cta.style.pointerEvents='';
-    cta.style.animation='none'; void cta.offsetWidth;
-    cta.style.animation='rise .55s forwards';
+    var cta=document.getElementById('pvCta');
+    if(cta){
+      cta.style.opacity='';
+      cta.style.pointerEvents='';
+      cta.style.animation='none'; void cta.offsetWidth;
+      cta.style.animation='rise .55s forwards';
+    }
   }
 
   function showGenError(msg){
