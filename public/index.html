@@ -585,9 +585,18 @@
   async function generate(){
     showLoadingPreview();
 
+    // 씬 데이터에 이름 정보 포함
+    var sceneData = vals();
+    var nameInput = document.getElementById('f_name');
+    var nameVal = nameInput ? nameInput.value.trim() : '';
+    // 이름 필드가 있으면 scenes에 포함 (프롬프트 개인화용)
+    if(nameVal) {
+      sceneData.customerName = nameVal;
+    }
+
     const payload={
       concept: CONCEPT,
-      scenes: vals(),
+      scenes: sceneData,
       photo: photo,
     };
 
