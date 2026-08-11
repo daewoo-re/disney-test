@@ -127,41 +127,82 @@ export default async function handler(req, res) {
   }
 }
 
-// ── Soul 이미지 프롬프트 (씬 상황 포함)
+// ── Soul 이미지 프롬프트 (씬 상황 포함, 씬별 의상 자연스럽게)
 async function generateSoulPrompts(apiKey, concept, scenes) {
   const s1 = (scenes && scenes.s1) || '';
   const s2 = (scenes && scenes.s2) || '';
-  const customerName = (scenes && scenes.customerName) || '';
-  const maleName   = customerName || 'the man';
 
-  const CHAR =
+  const CHAR_BASE =
     'Disney Pixar 3D animated movie style, Korean young adult couple, ' +
-    'male: wavy dark brown hair, blue denim shirt, khaki pants, white sneakers, ' +
-    'female: shoulder-length wavy dark brown hair, pink floral sundress, white sneakers, ' +
+    'character consistency, same characters throughout, ' +
+    'male: tall handsome Korean man with medium wavy dark brown hair, warm brown eyes, gentle face, ' +
+    'female: beautiful Korean woman with shoulder-length wavy dark brown hair, large bright eyes, warm smile, ' +
     'Disney princess and prince aesthetic, large expressive eyes, smooth porcelain skin, ' +
-    'masterpiece, ultra detailed, 3D CG animation';
+    'clean and minimal styling, natural and elegant, ' +
+    'masterpiece, ultra detailed, high quality 3D CG animation';
 
-  // 씬 상황이 담긴 정지 이미지 (DoP가 이걸 움직임으로 변환)
-  const defaults = [
-    CHAR + ', ' +
-    'wide shot of a cozy cafe interior, ' +
-    (s1 ? s1 + ', ' : 'couple meeting for the first time, ') +
-    maleName + ' sitting at cafe window seat with coffee cup, ' +
-    'the woman just walked in, their eyes meeting across the room, ' +
-    'surprised and nervous expressions, warm golden sunlight, soft bokeh background, ' +
-    'NO ring, NO proposal, just a first meeting moment',
+  // 씬 인덱스 기반 의상 + 상황 설정
+  const SCENE_CONFIGS = [
+    {
+      outfit_m: 'simple white t-shirt, light beige chinos, white sneakers',
+      outfit_f: 'soft pastel blouse, light blue jeans, white sneakers',
+      vibe: 'casual clean everyday look',
+      scene: 'wide shot of a warm cozy cafe interior, couple meeting for the first time, man sitting at window seat holding coffee cup looking surprised, woman just walked in, eyes meeting across the room, nervous excited expressions, warm golden afternoon sunlight, soft bokeh background',
+      no: 'NO ring, NO proposal'
+    },
+    {
+      outfit_m: 'neat navy blue crewneck sweater, dark slim pants, clean sneakers',
+      outfit_f: 'simple knit top, midi skirt, ballet flats',
+      vibe: 'smart casual date look',
+      scene: 'cozy cinema interior, couple sitting side by side in plush seats, man gently holding the woman hand, woman smiling shyly looking at their hands, soft warm cinema lighting, popcorn on armrest',
+      no: 'NO ring, NO proposal'
+    },
+    {
+      outfit_m: 'light grey hoodie, slim jeans, sneakers',
+      outfit_f: 'cozy oversized cardigan, simple dress underneath, sneakers',
+      vibe: 'relaxed cozy evening look',
+      scene: 'narrow quiet alley at night near apartment entrance, warm street lamp glowing softly, couple standing face to face very close, man leaning in gently for a first kiss, woman eyes closing softly, night bokeh lights in background',
+      no: 'NO ring, NO proposal'
+    },
+    {
+      outfit_m: 'linen shirt, comfortable travel pants, sneakers, small backpack',
+      outfit_f: 'flowy summer dress, comfortable sandals, crossbody bag',
+      vibe: 'casual comfortable travel look',
+      scene: 'beautiful scenic travel destination, couple walking together excited and happy, stunning landscape background, golden hour warm lighting, bright joyful smiles',
+      no: 'NO ring, NO proposal'
+    },
+    {
+      outfit_m: 'casual t-shirt, jogger pants, home casual look',
+      outfit_f: 'comfortable casual top, loose pants, indoor casual look',
+      vibe: 'relaxed home casual look',
+      scene: 'indoor home setting, couple sitting apart with visible distance between them, both looking away with sulky expressions, man looking guilty, woman pouting, soft warm home lighting, bittersweet atmosphere',
+      no: 'NO ring, NO proposal'
+    },
+  ];
 
-    CHAR + ', ' +
-    (s2 ? s2 + ', ' : 'first date scene, ') +
-    'couple sitting side by side, ' +
-    'romantic moment, warm lighting, gentle smiles, ' +
-    'NO ring, NO proposal box, natural casual scene'
+  // 씬 입력값 기반으로 가장 맞는 config 선택 (기본: 씬1=config0, 씬2=config1)
+  function buildPrompt(sceneInput, configIdx) {
+    var cfg = SCENE_CONFIGS[Math.min(configIdx, SCENE_CONFIGS.length-1)];
+    var userContext = sceneInput ? sceneInput + ', ' : '';
+    return CHAR_BASE + ', ' +
+      'male wearing ' + cfg.outfit_m + ', ' +
+      'female wearing ' + cfg.outfit_f + ', ' +
+      cfg.vibe + ', ' +
+      userContext +
+      cfg.scene + ', ' +
+      cfg.no;
+  }
+
+  // Claude 없이도 기본값으로 정확한 씬 생성
+  var defaults = [
+    buildPrompt(s1, 0),
+    buildPrompt(s2, 1)
   ];
 
   if (!apiKey) return defaults;
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
+    var r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -171,27 +212,35 @@ async function generateSoulPrompts(apiKey, concept, scenes) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
-        system: 'Higgsfield Soul Cinema 이미지 생성용 프롬프트 전문가.\n씬 상황이 담긴 정지 이미지 프롬프트를 작성합니다.\n반드시 지켜야 할 규칙:\n1. 캐릭터: Disney Pixar 3D style, 남자=blue denim shirt/khaki pants, 여자=pink floral sundress\n2. 반드시 씬 상황(장소+행동)을 구체적으로 묘사\n3. 반지/프로포즈 관련 내용 절대 금지 (마지막 씬 제외)\n4. "NO ring NO proposal" 문구 포함\n5. 순수 JSON만 응답',
+        system: 'Higgsfield Soul Cinema 이미지 생성용 프롬프트 전문가.\n' +
+          '씬 상황이 담긴 정지 이미지 프롬프트를 작성합니다.\n' +
+          '규칙:\n' +
+          '1. CHAR_BASE로 시작 후 의상(outfit) 추가\n' +
+          '2. 씬 상황(장소+행동) 구체적으로 묘사\n' +
+          '3. 씬에 맞는 자연스럽고 깔끔한 의상 선택 (과하지 않게)\n' +
+          '4. 반드시 NO ring, NO proposal 포함 (마지막 프로포즈 씬 제외)\n' +
+          '5. 순수 JSON만 응답',
         messages: [{
           role: 'user',
-          content: '씬1: "' + (s1 || '카페에서 처음 만나는 순간') + '"\n' +
-            '씬2: "' + (s2 || '첫 데이트') + '"\n' +
+          content: 'CHAR_BASE: "' + CHAR_BASE + '"\n\n' +
+            '씬1: "' + (s1 || '카페에서 처음 만나는 순간') + '"\n' +
+            '씬2: "' + (s2 || '영화관에서 손을 잡는 순간') + '"\n' +
             '컨셉: ' + (concept || 'propose') + '\n\n' +
-            '각 씬의 상황이 담긴 Disney Pixar 3D 정지 이미지 프롬프트를 작성하세요.\n' +
-            '씬 상황(장소, 행동, 분위기)을 매우 구체적으로 묘사하고 반지/프로포즈는 절대 포함하지 마세요.\n' +
-            '{"prompts":["씬1 이미지 프롬프트 (150단어 이내)","씬2 이미지 프롬프트 (150단어 이내)"]}'
+            'CHAR_BASE를 앞에 붙이고, 씬에 어울리는 자연스러운 의상과 상황 묘사.\n' +
+            '150단어 이내. NO ring NO proposal 필수.\n' +
+            '{"prompts":["씬1","씬2"]}'
         }]
       })
     });
 
     if (!r.ok) return defaults;
-    const d = await r.json();
-    let raw = d.content.map(function(b){ return b.text||''; }).join('');
+    var d = await r.json();
+    var raw = d.content.map(function(b){ return b.text||''; }).join('');
     raw = raw.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
-    const p = JSON.parse(raw);
+    var p = JSON.parse(raw);
     if (p.prompts && p.prompts.length >= 2) {
-      console.log('Soul 프롬프트 씬1:', p.prompts[0].slice(0,80));
-      console.log('Soul 프롬프트 씬2:', p.prompts[1].slice(0,80));
+      console.log('Soul 씬1 프롬프트:', p.prompts[0].slice(0,80));
+      console.log('Soul 씬2 프롬프트:', p.prompts[1].slice(0,80));
       return p.prompts;
     }
     return defaults;
