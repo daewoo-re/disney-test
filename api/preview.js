@@ -173,8 +173,7 @@ async function generateGPTImage(apiKey, prompt, referenceImageUrl) {
         prompt: prompt,
         n: 1,
         size: '1536x1024',
-        quality: 'low',
-        response_format: 'url'
+        quality: 'low'
       })
     });
 
@@ -187,15 +186,21 @@ async function generateGPTImage(apiKey, prompt, referenceImageUrl) {
     }
 
     const d = JSON.parse(txt);
-    const url = d.data && d.data[0] && (d.data[0].url || d.data[0].b64_json);
-    if (!url) return null;
+    if (!d.data || !d.data[0]) return null;
 
-    // b64_json 반환 시 imgbb 업로드
+    // URL 반환 시
+    if (d.data[0].url) return d.data[0].url;
+
+    // b64_json 반환 시 → imgbb 업로드
     if (d.data[0].b64_json) {
-      return await uploadBase64ToImgbb(d.data[0].b64_json, process.env.IMGBB_API_KEY);
+      console.log('GPT Image b64_json 반환 → imgbb 업로드');
+      const uploaded = await uploadBase64ToImgbb(d.data[0].b64_json, process.env.IMGBB_API_KEY);
+      if (uploaded) return uploaded;
+      // imgbb 실패 시 data URL로 반환
+      return 'data:image/png;base64,' + d.data[0].b64_json;
     }
 
-    return url;
+    return null;
   } catch(e) {
     console.warn('GPT Image 오류:', e.message);
     return null;
