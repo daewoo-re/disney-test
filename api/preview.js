@@ -161,7 +161,7 @@ async function generateGPTImage(apiKey, prompt, referenceImageUrl) {
       messages_content = [{ role: 'user', content: prompt }];
     }
 
-    // GPT Image 2 API 호출
+    // GPT Image 2 API 호출 (최신 플래그십 모델)
     const r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
@@ -169,7 +169,7 @@ async function generateGPTImage(apiKey, prompt, referenceImageUrl) {
         'Authorization': 'Bearer ' + apiKey
       },
       body: JSON.stringify({
-        model: 'gpt-image-1',
+        model: 'gpt-image-2',
         prompt: prompt,
         n: 1,
         size: '1536x1024',
