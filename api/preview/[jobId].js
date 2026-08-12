@@ -40,23 +40,32 @@ export default async function handler(req, res) {
 
   function getStatus(r) { return r.status || r.state || ''; }
 
-  // 확인된 응답 형식: { status, video: { url } }
-  function extractVideoUrl(r) {
-    if (r.video && r.video.url) return r.video.url;  // ← 확인된 실제 형식
+  // URL 추출 (영상 + 이미지 모두 대응)
+  function extractResultUrl(r) {
+    // 영상 URL
+    if (r.video && r.video.url) return r.video.url;
     if (r.video && typeof r.video === 'string') return r.video;
-    if (r.url) return r.url;
     if (r.video_url) return r.video_url;
+    // 이미지 URL (NB Pro)
+    if (r.url) return r.url;
+    if (r.image_url) return r.image_url;
+    if (r.images && r.images[0] && r.images[0].url) return r.images[0].url;
+    // output/result 중첩
     if (r.output && r.output.url) return r.output.url;
     if (r.output && typeof r.output === 'string') return r.output;
+    if (r.result && r.result.url) return r.result.url;
+    if (r.data && r.data.url) return r.data.url;
+    // outputs 배열
     if (Array.isArray(r.outputs) && r.outputs[0]) {
       return typeof r.outputs[0] === 'string' ? r.outputs[0] : r.outputs[0].url;
     }
-    if (r.result && r.result.url) return r.result.url;
-    if (r.data && r.data.url) return r.data.url;
-    // 전체에서 .mp4 URL 탐색 (최후 수단)
-    const m = JSON.stringify(r).match(/"(https:\/\/[^"]*\.mp4[^"]*)"/);
-    if (m) return m[1];
-    console.warn('URL 추출 실패:', JSON.stringify(r).slice(0, 200));
+    // 전체에서 URL 탐색 (.mp4 또는 이미지)
+    const str = JSON.stringify(r);
+    const mp4 = str.match(/"(https:\/\/[^"]*\.mp4[^"]*)"/);
+    if (mp4) return mp4[1];
+    const img = str.match(/"(https:\/\/[^"]*\.(jpg|jpeg|png|webp)[^"]*)"/i);
+    if (img) return img[1];
+    console.warn('URL 추출 실패:', str.slice(0, 200));
     return null;
   }
 
@@ -79,7 +88,7 @@ export default async function handler(req, res) {
         }
         const data = await resp.json();
         if (DONE_STATUSES.includes(data.status)) {
-          console.log('완료:', jid, '→', extractVideoUrl(data));
+          console.log('완료:', jid, '→', extractResultUrl(data));
         } else {
           console.log('상태:', data.status, jid);
         }
@@ -104,7 +113,7 @@ export default async function handler(req, res) {
     });
 
     if (allDone) {
-      const videos = results.map(extractVideoUrl);
+      const videos = results.map(extractResultUrl);
       console.log('전체 완료 URLs:', JSON.stringify(videos));
       return res.status(200).json({ status: 'completed', result: { videos: videos } });
     }
