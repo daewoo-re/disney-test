@@ -610,9 +610,9 @@
         return;
       }
 
-      // Soul 비동기 → 브라우저에서 씬별 폴링
-      if(data1.phase === 'soul' && data1.soulJobs){
-        await pollSoulAndGenerateVideo(data1.soulJobs, data1.rawPhotoUrl, sceneData);
+      // Nano Banana 비동기 → 브라우저에서 씬별 폴링
+      if(data1.phase === 'nanoBanana' && data1.nbJobs){
+        await pollNBAndGenerateVideo(data1.nbJobs, data1.rawPhotoUrl, sceneData);
         return;
       }
 
@@ -623,11 +623,10 @@
     }
   }
 
-  /* Soul 씬별 완료 폴링 → 완료되면 DoP 영상 생성 */
-  async function pollSoulAndGenerateVideo(soulJobs, rawPhotoUrl, sceneData){
-    // soulJobs: [{done:true, url:...} or {done:false, jobId:...}]
-    var sceneImageUrls = soulJobs.map(function(j){ return j.done ? j.url : null; });
-    var pending = soulJobs.map(function(j,i){ return j.done ? null : {idx:i, jobId:j.jobId}; }).filter(Boolean);
+  /* Nano Banana 씬별 완료 폴링 → DoP 영상 생성 */
+  async function pollNBAndGenerateVideo(nbJobs, rawPhotoUrl, sceneData){
+    var sceneImageUrls = nbJobs.map(function(j){ return j.done ? j.url : null; });
+    var pending = nbJobs.map(function(j,i){ return j.done ? null : {idx:i, jobId:j.jobId}; }).filter(Boolean);
 
     var MAX = 60; // 최대 2분
     for(var i=0;i<MAX;i++){
@@ -644,9 +643,9 @@
             var url = (d.result && d.result.videos && d.result.videos[0]) ||
                       d.url || d.image_url || rawPhotoUrl;
             sceneImageUrls[item.idx] = url;
-            console.log('Soul 씬'+(item.idx+1)+' 완료:', url ? url.slice(0,60) : '없음');
+            console.log('NB 씬'+(item.idx+1)+' 완료:', url ? url.slice(0,60) : '없음');
           } else if(d.status==='failed'){
-            sceneImageUrls[item.idx] = rawPhotoUrl; // 실패 시 실사
+            sceneImageUrls[item.idx] = rawPhotoUrl;
           } else {
             stillPending.push(item);
           }
@@ -654,20 +653,17 @@
       }
       pending = stillPending;
 
-      // 진행률 업데이트
       var done = sceneImageUrls.filter(function(u){return !!u;}).length;
       var pct = Math.min(10 + (i/MAX)*40, 45);
       if(i%5===0) setGenStatus('🎨','디즈니 스타일 변환 중...',
-        '씬 이미지를 생성하고 있어요 ('+done+'/2 완료)', Math.round(pct), false);
+        '커플 사진을 디즈니 캐릭터로 변환하고 있어요! ('+done+'/2 완료)', Math.round(pct), false);
     }
 
-    // 타임아웃된 씬은 실사로 대체
     sceneImageUrls = sceneImageUrls.map(function(u){ return u || rawPhotoUrl; });
 
     setGenStatus('🎬','영상 제작 시작!',
-      '디즈니 이미지 완성! 이제 영상을 만들어요.', 50, false);
+      '디즈니 이미지 완성! 영상을 만들고 있어요.', 50, false);
 
-    // DoP 영상 생성 요청
     try{
       var res2 = await fetch(API_BASE+'/preview',{
         method:'POST',
