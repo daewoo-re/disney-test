@@ -581,7 +581,7 @@
     reader.readAsDataURL(file);
   }
 
-  /* ===== 미리보기 버튼 → 2단계 영상 생성 ===== */
+  /* ===== 3단계 파이프라인 ===== */
   async function generate(){
     showLoadingPreview();
 
@@ -591,9 +591,9 @@
     if(nameVal) sceneData.customerName = nameVal;
 
     try{
-      // ── PHASE 1: Soul Cinema 변환 요청
-      setGenStatus('🎨','디즈니 스타일 변환 중...',
-        'AI가 사진을 디즈니 캐릭터로 변환하고 있어요.<br>약 1분 소요됩니다.',10,false);
+      // ── PHASE 1: 고객 사진 → 캐릭터 보드 생성
+      setGenStatus('🎨','캐릭터 생성 중...',
+        '고객 사진을 디즈니 캐릭터로 변환하고 있어요.<br>잠시만 기다려주세요!', 10, false);
 
       const res1 = await fetch(API_BASE+'/preview',{
         method:'POST',
@@ -603,49 +603,109 @@
       const data1 = await res1.json();
       if(!res1.ok || !data1.ok) throw new Error(data1.message||'생성 실패');
 
-      // Soul 즉시 완료 or 실패폴백 → 바로 영상 생성
-      if(data1.phase === 'video'){
-        CURRENT_JOB = data1.jobId;
-        pollPreview(data1.jobId);
+      // 캐릭터 보드 완료 처리
+      if(data1.phase === 'charBoard'){
+        if(data1.done){
+          // 즉시 완료 → 씬 이미지 생성
+          await runSceneImagePhase(data1.charBoardUrl, sceneData);
+        } else {
+          // 비동기 → 폴링 후 씬 이미지 생성
+          await pollCharBoardAndContinue(data1.charBoardJobId, sceneData);
+        }
         return;
       }
 
-      // Nano Banana 비동기 → 브라우저에서 씬별 폴링
-      if(data1.phase === 'nanoBanana' && data1.nbJobs){
-        await pollNBAndGenerateVideo(data1.nbJobs, data1.rawPhotoUrl, sceneData);
-        return;
-      }
-
-      throw new Error('알 수 없는 응답 형식');
+      throw new Error('알 수 없는 응답');
 
     }catch(e){
       showError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
     }
   }
 
-  /* Nano Banana 씬별 완료 폴링 → DoP 영상 생성 */
-  async function pollNBAndGenerateVideo(nbJobs, rawPhotoUrl, sceneData){
-    var sceneImageUrls = nbJobs.map(function(j){ return j.done ? j.url : null; });
-    var pending = nbJobs.map(function(j,i){ return j.done ? null : {idx:i, jobId:j.jobId}; }).filter(Boolean);
+  /* 캐릭터 보드 폴링 → 완료되면 씬 이미지 단계 */
+  async function pollCharBoardAndContinue(charBoardJobId, sceneData){
+    const MAX = 60; // 최대 2분
+    for(var i=0; i<MAX; i++){
+      await new Promise(function(r){setTimeout(r,2000);});
+      try{
+        var r = await fetch(API_BASE+'/preview/'+charBoardJobId);
+        var d = await r.json();
 
-    var MAX = 60; // 최대 2분
-    for(var i=0;i<MAX;i++){
+        if(d.status==='completed'){
+          var charUrl = (d.result && d.result.videos && d.result.videos[0])
+            || d.url || d.image_url || null;
+          console.log('캐릭터 보드 완료:', charUrl ? charUrl.slice(0,60) : '없음');
+          setGenStatus('✅','캐릭터 완성!','씬별 이미지를 생성하고 있어요.', 30, false);
+          await runSceneImagePhase(charUrl, sceneData);
+          return;
+        }
+        if(d.status==='failed'){
+          console.warn('캐릭터 보드 실패, 원본 사진 폴백');
+          await runSceneImagePhase(null, sceneData); // 폴백
+          return;
+        }
+
+        var pct = Math.min(10 + i*0.3, 28);
+        if(i%5===0) setGenStatus('🎨','캐릭터 생성 중...',
+          'AI가 디즈니 캐릭터를 그리고 있어요! ('+Math.round(pct)+'%)', Math.round(pct), false);
+
+      }catch(e){ console.warn('캐릭터 보드 폴링 오류:', e.message); }
+    }
+    // 타임아웃 → 폴백
+    console.warn('캐릭터 보드 타임아웃, 원본 사진 폴백');
+    await runSceneImagePhase(null, sceneData);
+  }
+
+  /* PHASE 2: 캐릭터 보드 → 씬 이미지 생성 */
+  async function runSceneImagePhase(charBoardUrl, sceneData){
+    setGenStatus('🖼️','씬 이미지 생성 중...',
+      '각 장면의 이미지를 만들고 있어요.', 32, false);
+
+    try{
+      var res2 = await fetch(API_BASE+'/preview',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          phase:'sceneImage',
+          concept:CONCEPT,
+          scenes:sceneData,
+          charBoardUrl: charBoardUrl
+        })
+      });
+      var data2 = await res2.json();
+      if(!res2.ok || !data2.ok) throw new Error(data2.message||'씬 이미지 생성 실패');
+
+      // 씬 이미지 폴링
+      await pollSceneImagesAndContinue(data2.sceneJobs, charBoardUrl, sceneData);
+
+    }catch(e){
+      showError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
+    }
+  }
+
+  /* 씬 이미지 폴링 → 완료되면 영상 생성 */
+  async function pollSceneImagesAndContinue(sceneJobs, charBoardUrl, sceneData){
+    var sceneImageUrls = sceneJobs.map(function(j){ return j.done ? j.url : null; });
+    var pending = sceneJobs.map(function(j,i){ return j.done ? null : {idx:i, jobId:j.jobId}; }).filter(Boolean);
+
+    var MAX = 60;
+    for(var i=0; i<MAX; i++){
       if(pending.length === 0) break;
       await new Promise(function(r){setTimeout(r,2000);});
 
       var stillPending = [];
-      for(var pi=0;pi<pending.length;pi++){
+      for(var pi=0; pi<pending.length; pi++){
         var item = pending[pi];
         try{
-          var r2 = await fetch(API_BASE+'/preview/'+item.jobId);
-          var d = await r2.json();
+          var r = await fetch(API_BASE+'/preview/'+item.jobId);
+          var d = await r.json();
           if(d.status==='completed'){
-            var url = (d.result && d.result.videos && d.result.videos[0]) ||
-                      d.url || d.image_url || rawPhotoUrl;
+            var url = (d.result && d.result.videos && d.result.videos[0])
+              || d.url || d.image_url || charBoardUrl;
             sceneImageUrls[item.idx] = url;
-            console.log('NB 씬'+(item.idx+1)+' 완료:', url ? url.slice(0,60) : '없음');
+            console.log('씬이미지'+(item.idx+1)+' 완료');
           } else if(d.status==='failed'){
-            sceneImageUrls[item.idx] = rawPhotoUrl;
+            sceneImageUrls[item.idx] = charBoardUrl || '';
           } else {
             stillPending.push(item);
           }
@@ -654,31 +714,32 @@
       pending = stillPending;
 
       var done = sceneImageUrls.filter(function(u){return !!u;}).length;
-      var pct = Math.min(10 + (i/MAX)*40, 45);
-      if(i%5===0) setGenStatus('🎨','디즈니 스타일 변환 중...',
-        '커플 사진을 디즈니 캐릭터로 변환하고 있어요! ('+done+'/2 완료)', Math.round(pct), false);
+      var pct = Math.min(32 + (i/MAX)*18, 48);
+      if(i%5===0) setGenStatus('🖼️','씬 이미지 생성 중...',
+        '장면 이미지를 그리고 있어요 ('+done+'/2 완료)', Math.round(pct), false);
     }
 
-    sceneImageUrls = sceneImageUrls.map(function(u){ return u || rawPhotoUrl; });
+    // 타임아웃된 씬은 캐릭터 보드로 대체
+    sceneImageUrls = sceneImageUrls.map(function(u){ return u || charBoardUrl || ''; });
 
-    setGenStatus('🎬','영상 제작 시작!',
-      '디즈니 이미지 완성! 영상을 만들고 있어요.', 50, false);
+    setGenStatus('🎬','영상 생성 시작!','씬 이미지 완성! 이제 영상을 만들어요.', 50, false);
 
+    // PHASE 3: 씬 이미지 → 영상 생성
     try{
-      var res2 = await fetch(API_BASE+'/preview',{
+      var res3 = await fetch(API_BASE+'/preview',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          concept: CONCEPT,
-          scenes: sceneData,
-          phase: 'video',
-          sceneImageUrls: sceneImageUrls
+          phase:'video',
+          concept:CONCEPT,
+          scenes:sceneData,
+          sceneImageUrls:sceneImageUrls
         })
       });
-      var data2 = await res2.json();
-      if(!res2.ok || !data2.ok) throw new Error(data2.message||'영상 생성 실패');
-      CURRENT_JOB = data2.jobId;
-      pollPreview(data2.jobId);
+      var data3 = await res3.json();
+      if(!res3.ok || !data3.ok) throw new Error(data3.message||'영상 생성 실패');
+      CURRENT_JOB = data3.jobId;
+      pollPreview(data3.jobId);
     }catch(e){
       showError('조회량이 많아 지연되고 있습니다.<br>잠시 후 다시 시도 부탁드립니다.');
     }
